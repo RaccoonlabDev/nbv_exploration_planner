@@ -43,7 +43,7 @@ Clone the planner repository to your catkin workspace and install package depend
 
 ```
 cd ~/catkin_ws/src/
-git clone https://github.com/vicmassy/nbv_exploration_planner.git
+git clone https://github.com/InnopolisAero/nbv_exploration_planner
 wstool init . ./nbv_exploration_planner/dependencies.rosinstall
 wstool update
 ```
