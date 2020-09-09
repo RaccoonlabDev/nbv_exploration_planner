@@ -1,0 +1,7 @@
+# Change status of exploration planner
+nbv_msgs/Status status 		# current state of planner
+---
+bool success
+string message
+
+

@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<package>
+  <name>nbveplanner</name>
+  <version>0.0.0</version>
+  <description>The Next-Best-View Exploration Planner package</description>
+
+  <maintainer email="v.massague.respall@innopolis.university">Victor Massagué Respall</maintainer>
+
+  <license>Innopolis University</license>
+
+  <author>Victor Massagué Respall</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <build_depend>roscpp</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>visualization_msgs</build_depend>
+  <build_depend>nbv_msgs</build_depend>
+  <build_depend>kdtree</build_depend>
+  <build_depend>voxblox_ros</build_depend>
+  <build_depend>message_generation</build_depend>
+  
+  <run_depend>roscpp</run_depend>
+  <run_depend>tf</run_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>nbv_msgs</run_depend>
+  <run_depend>visualization_msgs</run_depend>
+  <run_depend>kdtree</run_depend>
+  <run_depend>voxblox_ros</run_depend>
+  <run_depend>message_runtime</run_depend>
+</package>
