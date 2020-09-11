@@ -17,7 +17,7 @@
     <arg name="shift_initial_z" default="-0.25"/>
     <arg name="path_plot" default=""/>
     <arg name="method" default="fast" />
-    <arg name="voxel_size" default="0.1" />
+    <arg name="voxel_size" default="0.15" />
     <arg name="position_controller" default="/goal"/>
     <arg name="color_mode" default="color"/>
 

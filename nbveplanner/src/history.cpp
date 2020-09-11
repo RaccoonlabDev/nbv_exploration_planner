@@ -164,22 +164,21 @@ void History::reset() {
     while (not stopped_) {
       ros::Duration(0.5).sleep();
     }
-  }
-  clear();
-  graph.clear();
-  activeNodes.clear();
-  iteration_ = 0;
-  point_id_ = 0;
-  edge_id_ = 0;
-  kd_free(kdTree_);
-  kdTree_ = kd_create(3);
+    graph.clear();
+    activeNodes.clear();
+    iteration_ = 0;
+    point_id_ = 0;
+    edge_id_ = 0;
+    kd_free(kdTree_);
+    kdTree_ = kd_create(3);
 
-  visualization_msgs::Marker m;
-  m.action = visualization_msgs::Marker::DELETEALL;
-  graph_nodes_pub_.publish(m);
-  graph_edges_pub_.publish(m);
-  trajectory_pub_.publish(m);
-  gradient_pub_.publish(m);
+    visualization_msgs::Marker m;
+    m.action = visualization_msgs::Marker::DELETEALL;
+    graph_nodes_pub_.publish(m);
+    graph_edges_pub_.publish(m);
+    trajectory_pub_.publish(m);
+    gradient_pub_.publish(m);
+  }
 }
 
 void History::historyMaintenance() {
@@ -250,7 +249,7 @@ bool History::refineVertexPosition(Vertex *v) {
     bool refined = false;
     while (manager_->getDistanceAndGradientAtPosition(refinedPos, &distance,
                                                       &grad) and
-           grad.norm() > 0.01) {
+           grad.norm() > 0.001) {
       refinedPos += 0.2 * grad;
       if (refinedPos.x() < (params_.minX_ + params_.robot_radius_) or
           refinedPos.x() > (params_.maxX_ - params_.robot_radius_) or
@@ -266,12 +265,12 @@ bool History::refineVertexPosition(Vertex *v) {
     }
     if (refined) {
       bool connected = true;
-      for (const auto &n : v->adj) {
+      /*for (const auto &n : v->adj) {
         if (not manager_->checkMotion(refinedPos, n.first->pos)) {
           connected = false;
           break;
         }
-      }
+      }*/
       if (connected) {
         // Delete the old position in the kd-tree
         kd_delete3(kdTree_, v->pos.x(), v->pos.y(), v->pos.z());
@@ -279,7 +278,7 @@ bool History::refineVertexPosition(Vertex *v) {
                                      refinedPos.z());
         auto *tmp = (Vertex *)kd_res_item_data(nearest);
         kd_res_free(nearest);
-        if ((tmp->pos - v->pos).norm() > 0.3) {
+        if ((tmp->pos - v->pos).norm() > 0.5) {
           kd_insert3(kdTree_, refinedPos.x(), refinedPos.y(), refinedPos.z(),
                      v);
           v->pos = refinedPos;
@@ -316,16 +315,17 @@ bool History::refineVertexPosition(Vertex *v) {
   return false;
 }
 
+// TODO: Improve collapse with less restrictions (don't care about edges)
 void History::collapseVertices(Vertex *v1, Vertex *v2) {
-  std::unordered_set<std::string> visited;
+  std::unordered_set<unsigned int> visited;
   for (const auto &adj : v1->adj) {
     if (adj.first->pos != v2->pos) {
-      visited.insert(convertToString(v2->pos));
+      visited.insert(v2->id);
     }
   }
   geometry_msgs::Point p = getPointFromEigen(v1->pos);
   for (const auto &adj : v2->adj) {
-    if (visited.find(convertToString(adj.first->pos)) == visited.end() and
+    if (visited.find(adj.first->id) == visited.end() and
         adj.first->pos != v1->pos) {
       v1->adj.insert(adj);
       if (not adj.first->adj.erase(std::make_pair(v2, adj.second))) {
@@ -433,11 +433,11 @@ std::vector<geometry_msgs::Pose> History::getPathToNode(Eigen::Vector3d &goal) {
           res.emplace_back(successor.first);
           AStarNode *current = node;
           while (current->parent != nullptr) {
-            if (not manager_->checkMotion(res.back()->pos,
+            /*if (not manager_->checkMotion(res.back()->pos,
                                           current->parent->v->pos)) {
               res.emplace_back(current->v);
-            }
-            //res.emplace_back(current->v);
+            }*/
+            res.emplace_back(current->v);
             current = current->parent;
           }
           res.emplace_back(current->v);
@@ -479,15 +479,16 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
   double previous_yaw = tf::getYaw(current_pose_.orientation);
   trajectory.points.clear();
 
-  for (auto iter = pathNodes.rbegin() + 1; iter != pathNodes.rend(); ++iter) {
-  /*auto iter_start = pathNodes.rbegin();
-  auto iter_end = iter_start + 1;
-  while (iter_end != pathNodes.rend()) {
+  // for (auto iter = pathNodes.rbegin() + 1; iter != pathNodes.rend(); ++iter)
+  // {
+  auto iter_start = pathNodes.rbegin();
+  auto iter_end = pathNodes.rend() - 1;
+  while (iter_start != iter_end) {
     // TODO: Simplify Path
-    while ((iter_end + 1) != pathNodes.rend() and
-           not manager_->isLineInCollision((*iter_start)->pos,
-                                           (*iter_end + 1)->pos)) {
-      iter_end += 1;
+    while (
+        iter_end != (iter_start + 1) and
+        not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos)) {
+      iter_end -= 1;
     }
     start = {(*iter_start)->pos.x(), (*iter_start)->pos.y(),
              (*iter_start)->pos.z(), previous_yaw};
@@ -495,13 +496,13 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
            previous_yaw};
 
     trajectory.points.emplace_back(getPointFromEigen((*iter_start)->pos));
-    trajectory.points.emplace_back(getPointFromEigen((*iter_end)->pos));*/
+    trajectory.points.emplace_back(getPointFromEigen((*iter_end)->pos));
 
-    start = {(*(iter - 1))->pos.x(), (*(iter - 1))->pos.y(),
+    /*start = {(*(iter - 1))->pos.x(), (*(iter - 1))->pos.y(),
              (*(iter - 1))->pos.z(), previous_yaw};
     end = {(*iter)->pos.x(), (*iter)->pos.y(), (*iter)->pos.z(), previous_yaw};
     trajectory.points.emplace_back(getPointFromEigen((*(iter - 1))->pos));
-    trajectory.points.emplace_back(getPointFromEigen((*iter)->pos));
+    trajectory.points.emplace_back(getPointFromEigen((*iter)->pos));*/
 
     double yaw_direction = end[3] - start[3];
     if (yaw_direction > M_PI) {
@@ -531,8 +532,8 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
       tf::poseTFToMsg(poseTF, pose);
       result.emplace_back(pose);
     }
-    //iter_start = iter_end;
-    //iter_end = iter_start + 1;
+    iter_start = iter_end;
+    iter_end = pathNodes.rend() - 1;
   }
   if (trajectory_pub_.getNumSubscribers() > 0) {
     trajectory_pub_.publish(trajectory);
@@ -543,8 +544,7 @@ void History::addVertex(const geometry_msgs::Point &point) {
   Eigen::Vector3d pos;
   tf::pointMsgToEigen(point, pos);
   home_pos_ = pos;
-  graph.emplace_back(
-      Vertex{.pos = pos, .potential_gain = -1, .id = point_id_});
+  graph.emplace_back(Vertex{.pos = pos, .potential_gain = -1, .id = point_id_});
   Vertex *v = &(*graph.rbegin());
 
   point_msg.header.stamp = ros::Time();
@@ -577,29 +577,17 @@ void History::addVertexAndConnect(const geometry_msgs::Point &point,
   activeNodes.insert(newVertex);
 
   kdres *nearest_set =
-      kd_nearest_range3(kdTree_, state.x(), state.y(), state.z(), 5.0);
+      kd_nearest_range3(kdTree_, state.x(), state.y(), state.z(), 3.0);
   int n = kd_res_size(nearest_set);
   if (n <= 0) {
     kd_res_free(nearest_set);
     ROS_WARN("No node nearby the area");
     return;
   }
-  std::queue<Vertex *> queue;
-  std::unordered_set<unsigned int> visited;
-  Vertex *tmp;
-  for (int i = 0; i < n; ++i) {
-    tmp = (Vertex *)kd_res_item_data(nearest_set);
-    queue.push(tmp);
-    visited.insert(tmp->id);
-    kd_res_next(nearest_set);
-  }
-  kd_res_free(nearest_set);
-
-  visited.insert(newVertex->id);
   unsigned int copy_edge_id = edge_id_;
-  while (not queue.empty()) {
-    auto v = queue.front();
-    queue.pop();
+  Vertex *v;
+  for (int i = 0; i < n; ++i) {
+    v = (Vertex *)kd_res_item_data(nearest_set);
     if (manager_->checkMotion(state, v->pos)) {
       newVertex->adj.insert(std::make_pair(v, edge_id_));
       v->adj.insert(std::make_pair(newVertex, edge_id_));
@@ -610,15 +598,10 @@ void History::addVertexAndConnect(const geometry_msgs::Point &point,
       line.points[1] = getPointFromEigen(v->pos);
       graph_edges_pub_.publish(line);
       ++edge_id_;
-      for (const auto &neighbor : v->adj) {
-        //std::string neighbor_string = convertToString(neighbor.first->pos);
-        if (visited.find(neighbor.first->id) == visited.end()) {
-          queue.push(neighbor.first);
-          visited.insert(neighbor.first->id);
-        }
-      }
     }
+    kd_res_next(nearest_set);
   }
+  kd_res_free(nearest_set);
   // Force connection with the closest node if no other node succeeded
   if (copy_edge_id == edge_id_) {
     kdres *nearest = kd_nearest3(kdTree_, state.x(), state.y(), state.z());

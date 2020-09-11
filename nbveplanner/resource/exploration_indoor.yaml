@@ -3,16 +3,16 @@ system/dyaw_max: 0.8
 system/camera/pitch: [0.0]
 system/camera/horizontal: [86.0]
 system/camera/vertical: [57.0]
-system/bbx/x: 0.5
-system/bbx/y: 0.5
-system/bbx/z: 0.4
+system/bbx/x: 0.47
+system/bbx/y: 0.47
+system/bbx/z: 0.3
 system/bbx/overshoot: 0.25
 
 nbvep/gain/free: 0.0
 nbvep/gain/occupied: 0.0
 nbvep/gain/unmapped: 1.0
 nbvep/gain/range: 3.0
-nbvep/gain/zero: 0.0
+nbvep/gain/zero: 1.0
 nbvep/gain/degressive_coeff: 0.25
 
 nbvep/tree/extension_range: 5.0
@@ -29,8 +29,8 @@ nbvep/graph/node_vicinity_range: 5.0
 bbx/maxX: 7.5
 bbx/minX: -7.5
 
-bbx/maxY: 19.0
-bbx/minY: -0.5
+bbx/maxY: 12.0
+bbx/minY: -2.0
 
 bbx/maxZ: 2.7
 bbx/minZ: 1.2
