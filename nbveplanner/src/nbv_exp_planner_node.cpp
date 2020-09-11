@@ -131,7 +131,7 @@ void initializationMotion() {
   position_control_msg.pose.position.x = planner->local_position_.position.x;
   position_control_msg.pose.position.y = planner->local_position_.position.y;
   position_control_msg.pose.position.z = wp_z;
-
+/*
   mavros_msgs::SetMode offb_set_mode;
   offb_set_mode.request.custom_mode = "OFFBOARD";
 
@@ -170,7 +170,7 @@ void initializationMotion() {
     pose_pub.publish(position_control_msg);
     ros::Duration(dt).sleep();
   }
-
+*/
   // This is the initialization motion, necessary to known free space that
   // allows the planning of initial paths.
 
