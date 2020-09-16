@@ -247,9 +247,10 @@ bool History::refineVertexPosition(Vertex *v) {
     Eigen::Vector3d grad;
     Eigen::Vector3d refinedPos = v->pos;
     bool refined = false;
+    ros::Time timeout = ros::Time::now() + ros::Duration(1.0);
     while (manager_->getDistanceAndGradientAtPosition(refinedPos, &distance,
                                                       &grad) and
-           grad.norm() > 0.001) {
+           grad.norm() > 0.001 and ros::Time::now() < timeout) {
       refinedPos += 0.2 * grad;
       if (refinedPos.x() < (params_.minX_ + params_.robot_radius_) or
           refinedPos.x() > (params_.maxX_ - params_.robot_radius_) or
