@@ -314,8 +314,14 @@ bool manager_srv(nbv_msgs::SetState::Request &req,
 
 int main(int argc, char **argv) {
   ros::init(argc, argv, "nbvePlanner");
+  google::InitGoogleLogging(argv[0]);
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  google::InstallFailureSignalHandler();
+
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
+
+  FLAGS_alsologtostderr = true;
 
   planner = new nbvePlanner<Eigen::Vector4d>(nh, nh_private);
   // PUBLISHERS

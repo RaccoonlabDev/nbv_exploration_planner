@@ -1,10 +1,10 @@
 system/v_max: 0.8
 system/dyaw_max: 0.8
-system/camera/pitch: [0.0]
-system/camera/horizontal: [86.0]
-system/camera/vertical: [57.0]
-system/bbx/x: 0.47
-system/bbx/y: 0.47
+system/camera/pitch: 0.0
+system/camera/hfov: 86.0
+system/camera/vfov: 57.0
+system/bbx/x: 0.45
+system/bbx/y: 0.45
 system/bbx/z: 0.3
 system/bbx/overshoot: 0.25
 
@@ -26,11 +26,11 @@ nbvep/graph/zero_frontier_voxels: 12.0
 nbvep/graph/node_vicinity_range: 5.0
 
 # bounding box: necessary to limit the volume
-bbx/maxX: 7.5
-bbx/minX: -7.5
+bbx/maxX: 11.0
+bbx/minX: -3.0
 
-bbx/maxY: 12.0
-bbx/minY: -2.0
+bbx/maxY: 13.0
+bbx/minY: -1.0
 
-bbx/maxZ: 2.7
-bbx/minZ: 1.2
+bbx/maxZ: 3.0
+bbx/minZ: 1.0

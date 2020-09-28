@@ -19,13 +19,15 @@
 
 #include <nbveplanner/tree.h>
 
-template <typename stateVec> Node<stateVec>::Node() {
+template <typename stateVec>
+Node<stateVec>::Node() {
   parent_ = NULL;
   distance_ = DBL_MAX;
   gain_ = 0.0;
 }
 
-template <typename stateVec> Node<stateVec>::~Node() {
+template <typename stateVec>
+Node<stateVec>::~Node() {
   for (typename std::vector<Node<stateVec> *>::iterator it = children_.begin();
        it != children_.end(); it++) {
     delete (*it);
@@ -33,26 +35,31 @@ template <typename stateVec> Node<stateVec>::~Node() {
   }
 }
 
-template <typename stateVec> TreeBase<stateVec>::TreeBase() {
-  bestGain_ = params_.zero_gain_;
+template <typename stateVec>
+TreeBase<stateVec>::TreeBase() {
+  bestGain_ = params_->zero_gain_;
   bestNode_ = NULL;
   counter_ = 0;
   rootNode_ = NULL;
 }
 
 template <typename stateVec>
-TreeBase<stateVec>::TreeBase(VoxbloxManager *manager) {
+TreeBase<stateVec>::TreeBase(VoxbloxManager *manager,
+                             VoxbloxManager *manager_lowres, Params *params) {
   manager_ = manager;
-  bestGain_ = params_.zero_gain_;
+  manager_lowres_ = manager_lowres;
+  params_ = params;
+  bestGain_ = params_->zero_gain_;
   bestNode_ = NULL;
   counter_ = 0;
   rootNode_ = NULL;
 }
 
-template <typename stateVec> TreeBase<stateVec>::~TreeBase() {}
+template <typename stateVec>
+TreeBase<stateVec>::~TreeBase() {}
 
 template <typename stateVec>
-void TreeBase<stateVec>::setParams(const Params &params) {
+void TreeBase<stateVec>::setParams(Params *params) {
   params_ = params;
 }
 
@@ -63,12 +70,11 @@ int TreeBase<stateVec>::getCounter() {
 
 template <typename stateVec>
 bool TreeBase<stateVec>::gainFound() {
-  return bestGain_ > params_.zero_gain_;
+  return bestGain_ > params_->zero_gain_;
 }
 
 template <typename stateVec>
-void TreeBase<stateVec>::setHistRoot(
-    const Eigen::Vector4d &root) {
+void TreeBase<stateVec>::setHistRoot(const Eigen::Vector4d &root) {
   hist_root_ = root;
 }
 

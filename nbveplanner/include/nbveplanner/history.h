@@ -46,7 +46,7 @@ struct AStarNode {
 class History {
 public:
   History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-          VoxbloxManager *manager);
+          VoxbloxManager *manager, VoxbloxManager *manager_lowres);
 
   ~History();
 
@@ -101,6 +101,7 @@ protected:
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
   VoxbloxManager *manager_;
+  VoxbloxManager *manager_lowres_;
   kdtree *kdTree_;
 
   std::deque<Vertex> graph;

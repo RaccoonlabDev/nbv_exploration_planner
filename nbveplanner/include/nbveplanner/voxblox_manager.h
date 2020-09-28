@@ -2,24 +2,29 @@
 // Created by victor on 4/15/20.
 //
 
-#ifndef NBVPLANNER_SRC_VOXBLOXMANAGER_H_
-#define NBVPLANNER_SRC_VOXBLOXMANAGER_H_
+#ifndef NBVPLANNER_VOXBLOXMANAGER_H_
+#define NBVPLANNER_VOXBLOXMANAGER_H_
 
 #include <eigen3/Eigen/Dense>
-#include <math.h>
+#include <cmath>
 #include <ros/ros.h>
 #include <voxblox_ros/esdf_server.h>
 #include <voxblox_ros/tsdf_server.h>
 
 class VoxbloxManager {
 public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   enum VoxelStatus { kUnknown, kOccupied, kFree };
 
-  VoxbloxManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);
+  VoxbloxManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
+                 const std::string &ns);
 
   VoxelStatus getVisibility(const Eigen::Vector3d &view_point,
                             const Eigen::Vector3d &voxel_to_test,
                             bool stop_at_unknown_voxel) const;
+
+
 
   VoxelStatus getVoxelStatus(const Eigen::Vector3d &position) const;
 
@@ -85,4 +90,4 @@ private:
   double voxel_size_;
 };
 
-#endif // NBVPLANNER_SRC_VOXBLOXMANAGER_H_
+#endif // NBVPLANNER_VOXBLOXMANAGER_H_

@@ -1,8 +1,9 @@
 #include "nbveplanner/history.h"
 
 History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 VoxbloxManager *manager)
-    : nh_(nh), nh_private_(nh_private), manager_(manager) {
+                 VoxbloxManager *manager, VoxbloxManager *manager_lowres)
+    : nh_(nh), nh_private_(nh_private), manager_(manager),
+      manager_lowres_(manager_lowres) {
   graph_nodes_pub_ =
       nh_.advertise<visualization_msgs::Marker>("historyGraph/nodes", 100);
   graph_edges_pub_ =
@@ -96,13 +97,14 @@ double History::bfs(const Eigen::Vector3d &point) {
   std::queue<Eigen::Vector3d> queue;
   queue.emplace(point);
   Eigen::Vector3d new_pos;
+  double voxel_size = manager_lowres_->getResolution();
   static const std::vector<Eigen::Vector3d> connNeigh{
-      Eigen::Vector3d{params_.voxelSize_, 0.0, 0.0},
-      Eigen::Vector3d{-params_.voxelSize_, 0.0, 0.0},
-      Eigen::Vector3d{0.0, params_.voxelSize_, 0.0},
-      Eigen::Vector3d{0.0, -params_.voxelSize_, 0.0},
-      Eigen::Vector3d{0.0, 0.0, params_.voxelSize_},
-      Eigen::Vector3d{0.0, 0.0, -params_.voxelSize_}};
+      Eigen::Vector3d{voxel_size, 0.0, 0.0},
+      Eigen::Vector3d{-voxel_size, 0.0, 0.0},
+      Eigen::Vector3d{0.0, voxel_size, 0.0},
+      Eigen::Vector3d{0.0, -voxel_size, 0.0},
+      Eigen::Vector3d{0.0, 0.0, voxel_size},
+      Eigen::Vector3d{0.0, 0.0, -voxel_size}};
   int frontierVoxels = 0;
   double distance;
   VoxbloxManager::VoxelStatus status;
@@ -116,9 +118,9 @@ double History::bfs(const Eigen::Vector3d &point) {
           candidate.x() <= params_.maxX_ and candidate.x() >= params_.minX_ and
           candidate.y() <= params_.maxY_ and candidate.y() >= params_.minY_ and
           candidate.z() <= params_.maxZ_ and candidate.z() >= params_.minZ_) {
-        status = manager_->getVoxelStatus(candidate);
+        status = manager_lowres_->getVoxelStatus(candidate);
         if (status == VoxbloxManager::VoxelStatus::kFree and
-            manager_->getDistanceAtPosition(candidate, &distance) and
+            manager_lowres_->getDistanceAtPosition(candidate, &distance) and
             distance > params_.robot_radius_) {
           visited.insert(convertToString(candidate));
           queue.emplace(candidate);
@@ -128,7 +130,7 @@ double History::bfs(const Eigen::Vector3d &point) {
       }
     }
   }
-  return frontierVoxels * pow(params_.voxelSize_, 3.0);
+  return frontierVoxels * pow(voxel_size, 3.0);
 }
 
 void History::setParams(const Params &params) {
@@ -486,9 +488,8 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
   auto iter_end = pathNodes.rend() - 1;
   while (iter_start != iter_end) {
     // TODO: Simplify Path
-    while (
-        iter_end != (iter_start + 1) and
-        not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos)) {
+    while (iter_end != (iter_start + 1) and
+           not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos)) {
       iter_end -= 1;
     }
     start = {(*iter_start)->pos.x(), (*iter_start)->pos.y(),

@@ -15,7 +15,6 @@
 #include <ros/ros.h>
 #include <string>
 #include <vector>
-
 #include <chrono>
 #include <ctime>
 
@@ -40,12 +39,14 @@ protected:
 
   // Map Manager
   VoxbloxManager *manager_;
+  VoxbloxManager *manager_lowres_;
 
   bool exploration_complete_;
   bool ready_;
+  std::string ns_map_;
 
 public:
-  TreeBase<stateVec> *tree_;
+  RrtTree *tree_;
   History *hist_;
   std::ofstream dataFile_;
   std::string path_;
@@ -57,6 +58,8 @@ public:
   nbvePlanner(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);
 
   ~nbvePlanner();
+
+  void computeFOV();
 
   bool setParams();
 

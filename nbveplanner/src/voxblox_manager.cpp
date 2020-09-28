@@ -5,8 +5,9 @@
 #include "nbveplanner/voxblox_manager.h"
 
 VoxbloxManager::VoxbloxManager(const ros::NodeHandle &nh,
-                               const ros::NodeHandle &nh_private)
-    : nh_(nh), nh_private_(nh_private), esdf_server_(nh, nh_private) {
+                               const ros::NodeHandle &nh_private,
+                               const std::string &ns)
+    : nh_(nh), nh_private_(nh_private), esdf_server_(nh, nh_private, ns) {
   tsdf_layer_ = esdf_server_.getTsdfMapPtr()->getTsdfLayerPtr();
   esdf_layer_ = esdf_server_.getEsdfMapPtr()->getEsdfLayerPtr();
   CHECK_NOTNULL(tsdf_layer_);
@@ -33,7 +34,7 @@ VoxbloxManager::getVoxelStatus(const Eigen::Vector3d &position) const {
   if (esdf_server_.getEsdfMapPtr()->getDistanceAtPosition(position,
                                                           &distance)) {
     // This means the voxel is observed
-    if (distance < tsdf_layer_->voxel_size()) {
+    if (distance < voxel_size_) {
       return VoxelStatus::kOccupied;
     } else {
       return VoxelStatus::kFree;
