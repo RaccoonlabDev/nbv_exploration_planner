@@ -1,8 +1,16 @@
 #include "nbveplanner/history.h"
 
+namespace nbveplanner {
+
 History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 VoxbloxManager *manager)
-    : nh_(nh), nh_private_(nh_private), manager_(manager) {
+                 std::shared_ptr<VoxbloxManager> manager,
+                 std::shared_ptr<VoxbloxManager> manager_lowres,
+                 std::shared_ptr<Params> params)
+    : nh_(nh),
+      nh_private_(nh_private),
+      manager_(std::move(manager)),
+      manager_lowres_(std::move(manager_lowres)),
+      params_(std::move(params)) {
   graph_nodes_pub_ =
       nh_.advertise<visualization_msgs::Marker>("historyGraph/nodes", 100);
   graph_edges_pub_ =
@@ -14,10 +22,13 @@ History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
 
   poseClient_ = nh_.subscribe("pose_cov", 1, &History::poseCallback, this);
   odomClient_ = nh_.subscribe("odometry", 1, &History::odomCallback, this);
+
+  setUpPublisherMsg();
   drone_exploring_ = true;
   iteration_ = 0;
   point_id_ = 0;
   edge_id_ = 0;
+  home_pos_ = {0.0, 0.0, 0.0};
   kdTree_ = kd_create(3);
   initialized_ = false;
 }
@@ -37,7 +48,7 @@ void History::setUpPublisherMsg() {
 
   point_msg.header.frame_id = line.header.frame_id =
       trajectory.header.frame_id = gradient.header.frame_id =
-          params_.navigationFrame_;
+          params_->frame_id_;
   point_msg.ns = "point";
   point_msg.type = visualization_msgs::Marker::SPHERE;
   point_msg.action = line.action = trajectory.action = gradient.action =
@@ -96,13 +107,14 @@ double History::bfs(const Eigen::Vector3d &point) {
   std::queue<Eigen::Vector3d> queue;
   queue.emplace(point);
   Eigen::Vector3d new_pos;
+  double voxel_size = manager_lowres_->getResolution();
   static const std::vector<Eigen::Vector3d> connNeigh{
-      Eigen::Vector3d{params_.voxelSize_, 0.0, 0.0},
-      Eigen::Vector3d{-params_.voxelSize_, 0.0, 0.0},
-      Eigen::Vector3d{0.0, params_.voxelSize_, 0.0},
-      Eigen::Vector3d{0.0, -params_.voxelSize_, 0.0},
-      Eigen::Vector3d{0.0, 0.0, params_.voxelSize_},
-      Eigen::Vector3d{0.0, 0.0, -params_.voxelSize_}};
+      Eigen::Vector3d{voxel_size, 0.0, 0.0},
+      Eigen::Vector3d{-voxel_size, 0.0, 0.0},
+      Eigen::Vector3d{0.0, voxel_size, 0.0},
+      Eigen::Vector3d{0.0, -voxel_size, 0.0},
+      Eigen::Vector3d{0.0, 0.0, voxel_size},
+      Eigen::Vector3d{0.0, 0.0, -voxel_size}};
   int frontierVoxels = 0;
   double distance;
   VoxbloxManager::VoxelStatus status;
@@ -111,15 +123,19 @@ double History::bfs(const Eigen::Vector3d &point) {
     queue.pop();
     for (const auto &c : connNeigh) {
       Eigen::Vector3d candidate{new_pos + c};
+      // TODO: Write function to compare elementwise
       if (visited.find(convertToString(candidate)) == visited.end() and
           (candidate - point).norm() <= 6.0 and
-          candidate.x() <= params_.maxX_ and candidate.x() >= params_.minX_ and
-          candidate.y() <= params_.maxY_ and candidate.y() >= params_.minY_ and
-          candidate.z() <= params_.maxZ_ and candidate.z() >= params_.minZ_) {
-        status = manager_->getVoxelStatus(candidate);
+          candidate.x() <= params_->bbx_max_.x() and
+          candidate.x() >= params_->bbx_min_.x() and
+          candidate.y() <= params_->bbx_max_.y() and
+          candidate.y() >= params_->bbx_min_.y() and
+          candidate.z() <= params_->bbx_max_.z() and
+          candidate.z() >= params_->bbx_min_.z()) {
+        status = manager_lowres_->getVoxelStatus(candidate);
         if (status == VoxbloxManager::VoxelStatus::kFree and
-            manager_->getDistanceAtPosition(candidate, &distance) and
-            distance > params_.robot_radius_) {
+            manager_lowres_->getDistanceAtPosition(candidate, &distance) and
+            distance > params_->robot_radius_) {
           visited.insert(convertToString(candidate));
           queue.emplace(candidate);
         } else if (status == VoxbloxManager::VoxelStatus::kUnknown) {
@@ -128,28 +144,7 @@ double History::bfs(const Eigen::Vector3d &point) {
       }
     }
   }
-  return frontierVoxels * pow(params_.voxelSize_, 3.0);
-}
-
-void History::setParams(const Params &params) {
-  params_ = params;
-  const std::string &ns = ros::this_node::getName();
-  zero_frontier_voxels_ = 0;
-  if (!ros::param::get(ns + "/nbvep/graph/zero_frontier_voxels",
-                       zero_frontier_voxels_)) {
-    ROS_WARN("No minimum number of frontier voxels specified. Looking for %s. "
-             "Default is 0.",
-             (ns + "/nbvep/graph/zero_frontier_voxels").c_str());
-  }
-  vicinity_range_ = 5.0;
-  if (!ros::param::get(ns + "/nbvep/graph/node_vicinity_range",
-                       vicinity_range_)) {
-    ROS_WARN("No vicinity range specified. Looking for %s. "
-             "Default is 5.0",
-             (ns + "nbvep/graph/node_vicinity_range").c_str());
-  }
-
-  setUpPublisherMsg();
+  return frontierVoxels * pow(voxel_size, 3.0);
 }
 
 void History::clear() {
@@ -252,12 +247,13 @@ bool History::refineVertexPosition(Vertex *v) {
                                                       &grad) and
            grad.norm() > 0.001 and ros::Time::now() < timeout) {
       refinedPos += 0.2 * grad;
-      if (refinedPos.x() < (params_.minX_ + params_.robot_radius_) or
-          refinedPos.x() > (params_.maxX_ - params_.robot_radius_) or
-          refinedPos.y() < (params_.minY_ + params_.robot_radius_) or
-          refinedPos.y() > (params_.maxY_ - params_.robot_radius_) or
-          refinedPos.z() < (params_.minZ_ + params_.robot_radius_) or
-          refinedPos.z() > (params_.maxZ_ - params_.robot_radius_)) {
+      // TODO: Write function to compare elementwise
+      if (refinedPos.x() < (params_->bbx_min_.x() + params_->robot_radius_) or
+          refinedPos.x() > (params_->bbx_max_.x() - params_->robot_radius_) or
+          refinedPos.y() < (params_->bbx_min_.y() + params_->robot_radius_) or
+          refinedPos.y() > (params_->bbx_max_.y() - params_->robot_radius_) or
+          refinedPos.z() < (params_->bbx_min_.z() + params_->robot_radius_) or
+          refinedPos.z() > (params_->bbx_max_.z() - params_->robot_radius_)) {
         refinedPos -= 0.2 * grad;
         break;
       } else {
@@ -486,9 +482,8 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
   auto iter_end = pathNodes.rend() - 1;
   while (iter_start != iter_end) {
     // TODO: Simplify Path
-    while (
-        iter_end != (iter_start + 1) and
-        not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos)) {
+    while (iter_end != (iter_start + 1) and
+           not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos)) {
       iter_end -= 1;
     }
     start = {(*iter_start)->pos.x(), (*iter_start)->pos.y(),
@@ -514,18 +509,16 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
     }
     distance = {end[0] - start[0], end[1] - start[1], end[2] - start[2]};
     double disc =
-        std::min(params_.dt_ * params_.v_max_ / distance.norm(),
-                 params_.dt_ * params_.dyaw_max_ / abs(yaw_direction));
+        std::min(params_->dt_ * params_->v_max_ / distance.norm(),
+                 params_->dt_ * params_->dyaw_max_ / abs(yaw_direction));
     assert(disc > 0.0);
     for (double it = 0.0; it <= 1.0; it += disc) {
       tf::Vector3 origin((1.0 - it) * start[0] + it * end[0],
                          (1.0 - it) * start[1] + it * end[1],
                          (1.0 - it) * start[2] + it * end[2]);
       double yaw = start[3] + yaw_direction * it;
-      if (yaw > M_PI)
-        yaw -= 2.0 * M_PI;
-      if (yaw < -M_PI)
-        yaw += 2.0 * M_PI;
+      if (yaw > M_PI) yaw -= 2.0 * M_PI;
+      if (yaw < -M_PI) yaw += 2.0 * M_PI;
       tf::Quaternion quat;
       quat.setEuler(0.0, 0.0, yaw);
       tf::Pose poseTF(quat, origin);
@@ -542,11 +535,17 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
 }
 
 void History::addVertex(const geometry_msgs::Point &point) {
+  VLOG(5) << "I get inside addVertex";
   Eigen::Vector3d pos;
+  VLOG(5) << "Home Position Msg: " << point;
   tf::pointMsgToEigen(point, pos);
+  VLOG(5) << "Home Position: " << pos;
   home_pos_ = pos;
+  VLOG(5) << "Error 3";
   graph.emplace_back(Vertex{.pos = pos, .potential_gain = -1, .id = point_id_});
+  VLOG(5) << "Error 4";
   Vertex *v = &(*graph.rbegin());
+  VLOG(5) << "Error 5";
 
   point_msg.header.stamp = ros::Time();
   point_msg.id = point_id_;
@@ -555,8 +554,12 @@ void History::addVertex(const geometry_msgs::Point &point) {
   point_msg.color = gain_color_;
   graph_nodes_pub_.publish(point_msg);
   ++point_id_;
+  VLOG(5) << "Error 6";
   activeNodes.insert(v);
+  VLOG(5) << "Error 7";
   kd_insert3(kdTree_, pos.x(), pos.y(), pos.z(), v);
+  VLOG(5) << "Error 8";
+
   initialized_ = true;
 }
 
@@ -637,3 +640,5 @@ void History::publishVertex() {
     graph_edges_pub_.publish(line);
   }
 }
+
+}  // namespace nbveplanner

@@ -1,21 +1,18 @@
-#include <chrono>
-#include <eigen3/Eigen/Dense>
+#include "nbveplanner/nbvep.h"
+
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <nbv_msgs/SetState.h>
-#include <nbv_msgs/State.h>
-#include <nbv_msgs/Status.h>
-#include <nbveplanner/history.h>
-#include <nbveplanner/nbvep.hpp>
-#include <ros/package.h>
-#include <ros/ros.h>
-#include <std_msgs/UInt8.h>
-#include <tf/tf.h>
-#include <thread>
-
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
+#include <nbv_msgs/SetState.h>
+#include <nbv_msgs/State.h>
+#include <nbv_msgs/Status.h>
+#include <ros/package.h>
+#include <ros/ros.h>
+#include <tf/tf.h>
+#include <chrono>
+#include <thread>
 
 bool access_local_pos = false;
 bool stopped;
@@ -33,7 +30,7 @@ ros::ServiceClient set_mode_client;
 mavros_msgs::State current_state;
 nbv_msgs::State exploration_state;
 nbv_msgs::Status request_state;
-nbvePlanner<Eigen::Matrix<double, 4, 1>> *planner;
+std::unique_ptr<nbveplanner::nbvePlanner> planner;
 
 void state_cb(const mavros_msgs::State::ConstPtr &msg) { current_state = *msg; }
 
@@ -115,7 +112,6 @@ void start_planner() {
 }
 
 void initializationMotion() {
-
   while (ros::ok() && !current_state.connected) {
     ros::Duration(dt).sleep();
   }
@@ -131,46 +127,46 @@ void initializationMotion() {
   position_control_msg.pose.position.x = planner->local_position_.position.x;
   position_control_msg.pose.position.y = planner->local_position_.position.y;
   position_control_msg.pose.position.z = wp_z;
-/*
-  mavros_msgs::SetMode offb_set_mode;
-  offb_set_mode.request.custom_mode = "OFFBOARD";
+  /*
+    mavros_msgs::SetMode offb_set_mode;
+    offb_set_mode.request.custom_mode = "OFFBOARD";
 
-  mavros_msgs::CommandBool arm_cmd;
-  arm_cmd.request.value = true;
+    mavros_msgs::CommandBool arm_cmd;
+    arm_cmd.request.value = true;
 
-  ros::Time last_request = ros::Time::now();
+    ros::Time last_request = ros::Time::now();
 
-  while (current_state.mode != "OFFBOARD" or !current_state.armed) {
-    if( current_state.mode != "OFFBOARD" &&
-        (ros::Time::now() - last_request > ros::Duration(1.0))){
-      if( set_mode_client.call(offb_set_mode) &&
-          offb_set_mode.response.mode_sent){
-        ROS_INFO("Offboard enabled");
-      }
-      last_request = ros::Time::now();
-    } else {
-      if( !current_state.armed &&
+    while (current_state.mode != "OFFBOARD" or !current_state.armed) {
+      if( current_state.mode != "OFFBOARD" &&
           (ros::Time::now() - last_request > ros::Duration(1.0))){
-        if( arming_client.call(arm_cmd) &&
-            arm_cmd.response.success){
-          ROS_INFO("Vehicle armed");
+        if( set_mode_client.call(offb_set_mode) &&
+            offb_set_mode.response.mode_sent){
+          ROS_INFO("Offboard enabled");
         }
         last_request = ros::Time::now();
+      } else {
+        if( !current_state.armed &&
+            (ros::Time::now() - last_request > ros::Duration(1.0))){
+          if( arming_client.call(arm_cmd) &&
+              arm_cmd.response.success){
+            ROS_INFO("Vehicle armed");
+          }
+          last_request = ros::Time::now();
+        }
       }
+      position_control_msg.header.stamp = ros::Time::now();
+      //pose_pub.publish(position_control_msg);
+
+      ros::spinOnce();
+      ros::Duration(dt).sleep();
     }
-    position_control_msg.header.stamp = ros::Time::now();
-    //pose_pub.publish(position_control_msg);
 
-    ros::spinOnce();
-    ros::Duration(dt).sleep();
-  }
-
-  for (int i = 0; i < 100; ++i) {
-    position_control_msg.header.stamp = ros::Time::now();
-    pose_pub.publish(position_control_msg);
-    ros::Duration(dt).sleep();
-  }
-*/
+    for (int i = 0; i < 100; ++i) {
+      position_control_msg.header.stamp = ros::Time::now();
+      pose_pub.publish(position_control_msg);
+      ros::Duration(dt).sleep();
+    }
+  */
   // This is the initialization motion, necessary to known free space that
   // allows the planning of initial paths.
 
@@ -226,46 +222,47 @@ void private_manager() {
   ros::Rate loop_rate(10);
   while (ros::ok()) {
     switch (request_state.status) {
-    case nbv_msgs::Status::STATUS_RUN: {
-      if (exploration_state.status.status == nbv_msgs::Status::STATUS_WAIT) {
-        std::thread t1(initializationMotion);
-        t1.detach();
-        std::thread t2(&History::historyMaintenance, planner->hist_);
-        t2.detach();
-      } else if (exploration_state.status.status ==
-                     nbv_msgs::Status::STATUS_STOP or
-                 exploration_state.status.status ==
-                     nbv_msgs::Status::STATUS_GO_HOME_COMPLETE) {
-        std::thread t3(start_planner);
-        t3.detach();
+      case nbv_msgs::Status::STATUS_RUN: {
+        if (exploration_state.status.status == nbv_msgs::Status::STATUS_WAIT) {
+          std::thread t1(initializationMotion);
+          t1.detach();
+          std::thread t2(&nbveplanner::History::historyMaintenance,
+                         planner->hist_.get());
+          t2.detach();
+        } else if (exploration_state.status.status ==
+                       nbv_msgs::Status::STATUS_STOP or
+                   exploration_state.status.status ==
+                       nbv_msgs::Status::STATUS_GO_HOME_COMPLETE) {
+          std::thread t3(start_planner);
+          t3.detach();
+        }
+        stopped = false;
+        exploration_state.status.status = request_state.status;
+        request_state.status = nbv_msgs::Status::STATUS_WAIT;
+        break;
       }
-      stopped = false;
-      exploration_state.status.status = request_state.status;
-      request_state.status = nbv_msgs::Status::STATUS_WAIT;
-      break;
-    }
-    case nbv_msgs::Status::STATUS_STOP: {
-      stop_planner();
-      exploration_state.status.status = nbv_msgs::Status::STATUS_STOP;
-      request_state.status = nbv_msgs::Status::STATUS_WAIT;
-      break;
-    }
-    case nbv_msgs::Status::STATUS_RESET: {
-      stop_planner();
-      exploration_state.status.status = nbv_msgs::Status::STATUS_STOP;
-      planner->reset();
-      exploration_state.status.status = nbv_msgs::Status::STATUS_WAIT;
-      request_state.status = nbv_msgs::Status::STATUS_WAIT;
-      break;
-    }
-    case nbv_msgs::Status::STATUS_GO_HOME: {
-      stop_planner();
-      exploration_state.status.status = nbv_msgs::Status::STATUS_STOP;
-      std::thread t4(go_home);
-      t4.detach();
-      request_state.status = nbv_msgs::Status::STATUS_WAIT;
-      break;
-    }
+      case nbv_msgs::Status::STATUS_STOP: {
+        stop_planner();
+        exploration_state.status.status = nbv_msgs::Status::STATUS_STOP;
+        request_state.status = nbv_msgs::Status::STATUS_WAIT;
+        break;
+      }
+      case nbv_msgs::Status::STATUS_RESET: {
+        stop_planner();
+        exploration_state.status.status = nbv_msgs::Status::STATUS_STOP;
+        planner->reset();
+        exploration_state.status.status = nbv_msgs::Status::STATUS_WAIT;
+        request_state.status = nbv_msgs::Status::STATUS_WAIT;
+        break;
+      }
+      case nbv_msgs::Status::STATUS_GO_HOME: {
+        stop_planner();
+        exploration_state.status.status = nbv_msgs::Status::STATUS_STOP;
+        std::thread t4(go_home);
+        t4.detach();
+        request_state.status = nbv_msgs::Status::STATUS_WAIT;
+        break;
+      }
     }
     loop_rate.sleep();
   }
@@ -313,11 +310,21 @@ bool manager_srv(nbv_msgs::SetState::Request &req,
 }
 
 int main(int argc, char **argv) {
+  VLOG(5) << "First line";
   ros::init(argc, argv, "nbvePlanner");
+  google::InitGoogleLogging(argv[0]);
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  google::InstallFailureSignalHandler();
+
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
 
-  planner = new nbvePlanner<Eigen::Vector4d>(nh, nh_private);
+  VLOG(5) << "I initialized planner node";
+
+  FLAGS_alsologtostderr = true;
+  planner = std::make_unique<nbveplanner::nbvePlanner>(nh, nh_private);
+  VLOG(5) << "I initialized planner pointer";
+
   // PUBLISHERS
   pose_pub = nh.advertise<geometry_msgs::PoseStamped>("position_control", 10);
   status_pub = nh.advertise<nbv_msgs::State>("/nbv_planner/state", 10);
@@ -341,8 +348,8 @@ int main(int argc, char **argv) {
   nh.param<double>(ns + "/shift_initial_x", shift_initial_x, 0.0);
   nh.param<double>(ns + "/shift_initial_y", shift_initial_y, 0.0);
   nh.param<double>(ns + "/shift_initial_z", shift_initial_z, 0.0);
-  dt = planner->params_.dt_;
-  frame_id = planner->params_.navigationFrame_;
+  dt = planner->params_->dt_;
+  frame_id = planner->params_->frame_id_;
 
   exploration_state.status.status = nbv_msgs::Status::STATUS_WAIT;
 
