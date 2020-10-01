@@ -4,6 +4,8 @@
 
 #include "nbveplanner/voxblox_manager.h"
 
+namespace nbveplanner {
+
 VoxbloxManager::VoxbloxManager(const ros::NodeHandle &nh,
                                const ros::NodeHandle &nh_private,
                                const std::string &ns)
@@ -15,21 +17,29 @@ VoxbloxManager::VoxbloxManager(const ros::NodeHandle &nh,
   voxel_size_ = tsdf_layer_->voxel_size();
 }
 
-VoxbloxManager::VoxelStatus
-VoxbloxManager::getVoxelStatus(const Eigen::Vector3d &position) const {
-  /*voxblox::TsdfVoxel *voxel = tsdf_layer_->getVoxelPtrByCoordinates(
-      position.cast<voxblox::FloatingPoint>());
+VoxbloxManager::VoxelStatus VoxbloxManager::getVoxelStatus(
+    const voxblox::BlockIndex &block_idx,
+    const voxblox::VoxelIndex &voxel_idx) const {
+  const voxblox::Block<voxblox::TsdfVoxel>::Ptr block_ptr =
+      tsdf_layer_->getBlockPtrByIndex(block_idx);
+  if (block_ptr) {
+    // If this block exists, get the voxel.
+    const voxblox::TsdfVoxel &voxel =
+        block_ptr->getVoxelByVoxelIndex(voxel_idx);
+    if (voxel.weight <= 1e-1) {
+      return VoxelStatus::kUnknown;
+    } else if (voxel.distance <= 0.0) {
+      return VoxelStatus::kOccupied;
+    } else {
+      return VoxelStatus::kFree;
+    }
+  } else {
+    return VoxelStatus::kUnknown;
+  }
+}
 
-  if (voxel == nullptr) {
-    return VoxelStatus::kUnknown;
-  }
-  if (voxel->weight < 1e-6) {
-    return VoxelStatus::kUnknown;
-  }
-  if (voxel->distance > 0.0) {
-    return VoxelStatus::kFree;
-  }
-  return VoxelStatus::kOccupied;*/
+VoxbloxManager::VoxelStatus VoxbloxManager::getVoxelStatus(
+    const Point &position) const {
   double distance = 0.0;
   if (esdf_server_.getEsdfMapPtr()->getDistanceAtPosition(position,
                                                           &distance)) {
@@ -46,7 +56,6 @@ VoxbloxManager::getVoxelStatus(const Eigen::Vector3d &position) const {
 
 bool VoxbloxManager::checkCollisionWithRobotAtVoxel(
     const voxblox::GlobalIndex &global_index) const {
-
   voxblox::EsdfVoxel *voxel =
       esdf_layer_->getVoxelPtrByGlobalIndex(global_index);
   if (voxel == nullptr) {
@@ -55,9 +64,7 @@ bool VoxbloxManager::checkCollisionWithRobotAtVoxel(
   return robot_radius_ >= voxel->distance;
 }
 
-bool VoxbloxManager::checkMotion(const Eigen::Vector3d &start,
-                                 const Eigen::Vector3d &end) {
-
+bool VoxbloxManager::checkMotion(const Point &start, const Point &end) {
   voxblox::Point start_scaled, end_scaled;
   voxblox::AlignedVector<voxblox::GlobalIndex> indices;
 
@@ -75,11 +82,9 @@ bool VoxbloxManager::checkMotion(const Eigen::Vector3d &start,
   return true;
 }
 
-bool VoxbloxManager::checkMotion(const Eigen::Vector4d &start4d,
-                                 const Eigen::Vector4d &end4d) {
-
-  Eigen::Vector3d start = {start4d.x(), start4d.y(), start4d.z()};
-  Eigen::Vector3d end = {end4d.x(), end4d.y(), end4d.z()};
+bool VoxbloxManager::checkMotion(const Pose &start4d, const Pose &end4d) {
+  Point start = {start4d.x(), start4d.y(), start4d.z()};
+  Point end = {end4d.x(), end4d.y(), end4d.z()};
   voxblox::Point start_scaled, end_scaled;
   voxblox::AlignedVector<voxblox::GlobalIndex> indices;
 
@@ -97,7 +102,7 @@ bool VoxbloxManager::checkMotion(const Eigen::Vector4d &start4d,
   return true;
 }
 
-double VoxbloxManager::getDistanceAtPosition(const Eigen::Vector3d &pos) {
+double VoxbloxManager::getDistanceAtPosition(const Point &pos) {
   double distance = 0.0;
   if (not esdf_server_.getEsdfMapPtr()->getDistanceAtPosition(pos, &distance)) {
     return 0.0;
@@ -105,25 +110,24 @@ double VoxbloxManager::getDistanceAtPosition(const Eigen::Vector3d &pos) {
   return distance;
 }
 
-bool VoxbloxManager::getDistanceAtPosition(const Eigen::Vector3d &pos,
-                                           double *distance) {
+bool VoxbloxManager::getDistanceAtPosition(const Point &pos, double *distance) {
   return esdf_server_.getEsdfMapPtr()->getDistanceAtPosition(pos, distance);
 }
 
-bool VoxbloxManager::getDistanceAndGradientAtPosition(
-    const Eigen::Vector3d &pos, double *distance, Eigen::Vector3d *grad) {
+bool VoxbloxManager::getDistanceAndGradientAtPosition(const Point &pos,
+                                                      double *distance,
+                                                      Point *grad) {
   return esdf_server_.getEsdfMapPtr()->getDistanceAndGradientAtPosition(
       pos, distance, grad);
 }
 
-VoxbloxManager::VoxelStatus
-VoxbloxManager::getVisibility(const Eigen::Vector3d &view_point,
-                              const Eigen::Vector3d &voxel_to_test,
-                              bool stop_at_unknown_voxel) const {
+VoxbloxManager::VoxelStatus VoxbloxManager::getVisibility(
+    const Point &view_point, const Point &voxel_to_test,
+    bool stop_at_unknown_voxel) const {
   // This involves doing a raycast from view point to voxel to test.
   // Let's get the global voxel coordinates of both.
-  double voxel_size = tsdf_layer_->voxel_size();
-  double voxel_size_inv = 1.0 / voxel_size;
+  const static double voxel_size = tsdf_layer_->voxel_size();
+  const static double voxel_size_inv = 1.0 / voxel_size;
 
   const voxblox::Point start_scaled =
       view_point.cast<voxblox::FloatingPoint>() * voxel_size_inv;
@@ -154,12 +158,12 @@ void VoxbloxManager::clear() {
 }
 
 /*
-bool VoxbloxManager::isLineInCollision(const Eigen::Vector3d &start,
-                                       const Eigen::Vector3d &end) const {
+bool VoxbloxManager::isLineInCollision(const Point &start,
+                                       const Point &end) const {
   CHECK_NOTNULL(esdf_layer_);
   CHECK_GT(voxel_size_, 0.0);
 
-  Eigen::Vector3d direction = (end - start);
+  Point direction = (end - start);
   double distance = direction.norm();
   direction.normalize();
 
@@ -169,7 +173,7 @@ bool VoxbloxManager::isLineInCollision(const Eigen::Vector3d &start,
   }
 
   // Start at the start, keep going by distance increments...
-  Eigen::Vector3d current_position = start;
+  Point current_position = start;
   double distance_so_far = 0.0;
 
   while (distance_so_far <= distance) {
@@ -191,15 +195,15 @@ bool VoxbloxManager::isLineInCollision(const Eigen::Vector3d &start,
   return false;
 }
 
-bool VoxbloxManager::isLineInCollision(const Eigen::Vector4d &start4d,
-                                       const Eigen::Vector4d &end4d) const {
+bool VoxbloxManager::isLineInCollision(const Pose &start4d,
+                                       const Pose &end4d) const {
   CHECK_NOTNULL(esdf_layer_);
   CHECK_GT(voxel_size_, 0.0);
 
-  Eigen::Vector3d start = {start4d.x(), start4d.y(), start4d.z()};
-  Eigen::Vector3d end = {end4d.x(), end4d.y(), end4d.z()};
+  Point start = {start4d.x(), start4d.y(), start4d.z()};
+  Point end = {end4d.x(), end4d.y(), end4d.z()};
 
-  Eigen::Vector3d direction = (end - start);
+  Point direction = (end - start);
   double distance = direction.norm();
   direction.normalize();
 
@@ -209,7 +213,7 @@ bool VoxbloxManager::isLineInCollision(const Eigen::Vector4d &start4d,
   }
 
   // Start at the start, keep going by distance increments...
-  Eigen::Vector3d current_position = start;
+  Point current_position = start;
   double distance_so_far = 0.0;
 
   while (distance_so_far <= distance) {
@@ -231,3 +235,4 @@ bool VoxbloxManager::isLineInCollision(const Eigen::Vector4d &start4d,
   return false;
 }
  */
+}  // namespace nbveplanner

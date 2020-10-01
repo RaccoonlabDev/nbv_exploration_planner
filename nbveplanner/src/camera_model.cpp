@@ -1,8 +1,6 @@
-//
-// Created by victor on 9/22/20.
-//
-
 #include "nbveplanner/camera_model.h"
+
+namespace nbveplanner {
 
 void Plane::setFromPoints(const Point &p1, const Point &p2, const Point &p3) {
   Point p1p2 = p2 - p1;
@@ -152,6 +150,11 @@ void CameraModel::getAabb(Point *aabb_min, Point *aabb_max) const {
 }
 
 bool CameraModel::isPointInView(const Point &point) const {
+  for (int i = 0; i < 3; ++i) {
+    if (bbx_min_[i] > point[i] or bbx_max_[i] < point[i]) {
+      return false;
+    }
+  }
   for (const auto &bounding_plane : bounding_planes_) {
     if (!bounding_plane.isPointCorrectSide(point)) {
       return false;
@@ -229,3 +232,10 @@ void CameraModel::getFarPlanePoints(AlignedVector<Point> *points) const {
   points->emplace_back(T_G_C_ * corners_C_[5]);
   points->emplace_back(T_G_C_ * corners_C_[6]);
 }
+
+void CameraModel::setBoundingBox(Point &bbx_min, Point &bbx_max) {
+  bbx_min_ = bbx_min;
+  bbx_max_ = bbx_max;
+}
+
+}  // namespace nbveplanner

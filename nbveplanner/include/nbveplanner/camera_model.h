@@ -5,17 +5,9 @@
 #ifndef NBVEPLANNER_CAMERA_MODEL_H_
 #define NBVEPLANNER_CAMERA_MODEL_H_
 
-#include <glog/logging.h>
-#include <kindr/minimal/quat-transformation.h>
-#include <Eigen/Core>
-#include <iostream>
-#include <vector>
+#include <nbveplanner/common.h>
 
-typedef Eigen::Vector3d Point;
-typedef kindr::minimal::QuatTransformationTemplate<double> Transformation;
-
-template <typename Type>
-using AlignedVector = std::vector<Type, Eigen::aligned_allocator<Type>>;
+namespace nbveplanner {
 
 class Plane {
  public:
@@ -80,6 +72,8 @@ class CameraModel {
    */
   void getFarPlanePoints(AlignedVector<Point>* points) const;
 
+  void setBoundingBox(Point& bbx_min, Point& bbx_max);
+
  private:
   void calculateBoundingPlanes();
 
@@ -103,6 +97,10 @@ class CameraModel {
   AlignedVector<Plane> bounding_planes_;
   Point aabb_min_;
   Point aabb_max_;
+
+  Point bbx_min_;
+  Point bbx_max_;
 };
+}  // namespace nbveplanner
 
 #endif  // NBVEPLANNER_CAMERA_MODEL_H_

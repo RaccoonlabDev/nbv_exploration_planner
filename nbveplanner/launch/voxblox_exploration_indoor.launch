@@ -2,7 +2,7 @@
 <launch>
     <arg name="mav_name" default="iris"/>
     <arg name="waypoint_z" default="1.5" />
-    <arg name="rviz" default="true"/>
+    <arg name="rviz" default="false"/>
     <arg name="rosbag" default="false"/>
     <arg name="param_file" default="$(find nbveplanner)/resource/exploration_indoor.yaml" />
     <arg name="tf_frame" default="map" />
@@ -23,7 +23,7 @@
     <arg name="color_mode" default="color"/>
 
     <group ns="$(arg mav_name)">
-        <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen" args="-alsologtostderr --vmodule=camera_model*=0">
+        <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen" args="-alsologtostderr --v=-1">
             <param name="wp_z" type="double" value="$(arg waypoint_z)" />
             <param name="speed_rotate" type="double" value="$(arg speed_rotate)" />
             <param name="shift_initial_x" type="double" value="$(arg shift_initial_x)"/>

@@ -1,65 +1,50 @@
-/*
- * Copyright 2015 Andreas Bircher, ASL, ETH Zurich, Switzerland
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
+#ifndef NBVEPLANNER_TREE_H_
+#define NBVEPLANNER_TREE_H_
 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-#ifndef TREE_H_
-#define TREE_H_
+#include "nbveplanner/camera_model.h"
+#include "nbveplanner/params.h"
+#include "nbveplanner/voxblox_manager.h"
+#include "nbveplanner/common.h"
 
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
-#include <nbveplanner/camera_model.h>
-#include <nbveplanner/voxblox_manager.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <eigen3/Eigen/Dense>
 #include <vector>
 
-template <typename stateVec>
+namespace nbveplanner {
+
 class Node {
  public:
   Node();
 
   ~Node();
 
-  stateVec state_;
+  Pose state_;
   Node *parent_;
   std::vector<Node *> children_;
   double gain_;
   double distance_;
 };
 
-template <typename stateVec>
 class TreeBase {
  protected:
-  Params *params_;
   int counter_;
   double bestGain_;
-  Node<stateVec> *bestNode_;
-  Node<stateVec> *rootNode_;
-  VoxbloxManager *manager_;
-  VoxbloxManager *manager_lowres_;
-  stateVec root_;
-  stateVec hist_root_;
-  stateVec exact_root_;
+  Node *bestNode_;
+  Node *rootNode_;
+
+  Pose root_;
+  Pose hist_root_;
+  Pose exact_root_;
+
+  std::shared_ptr<Params> params_;
 
  public:
-  typedef Eigen::Vector4d StateVec;
-
   TreeBase();
 
-  TreeBase(VoxbloxManager *manager, VoxbloxManager *manager_lowres, Params *params);
+  TreeBase(std::shared_ptr<Params> params);
 
   ~TreeBase();
 
@@ -87,13 +72,12 @@ class TreeBase {
 
   virtual void setRootVicinity(double rootVicinity) = 0;
 
-  void setParams(Params *params);
+  void setHistRoot(const Pose &root);
 
-  void setHistRoot(const Eigen::Vector4d &root);
-
-  int getCounter();
+  int getCounter() const;
 
   bool gainFound();
 };
 
+}  // namespace nbveplanner
 #endif

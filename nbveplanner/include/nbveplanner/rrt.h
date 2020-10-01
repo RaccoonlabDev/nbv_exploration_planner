@@ -1,10 +1,11 @@
-#ifndef RRTTREE_H_
-#define RRTTREE_H_
+#ifndef NBVEPLANNER_RRTTREE_H_
+#define NBVEPLANNER_RRTTREE_H_
+
+#include "nbveplanner/tree.h"
 
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <kdtree/kdtree.h>
 #include <nav_msgs/Odometry.h>
-#include <nbveplanner/tree.h>
 #include <ros/package.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -19,13 +20,16 @@
 #include <thread>
 
 #define SQ(x) ((x) * (x))
-#define SQRT2 0.70711
 
-class RrtTree : public TreeBase<Eigen::Vector4d> {
+namespace nbveplanner {
+
+class RrtTree : public TreeBase {
  public:
   RrtTree();
 
-  RrtTree(VoxbloxManager *manager, VoxbloxManager *manager_lowres, Params *params);
+  RrtTree(std::shared_ptr<VoxbloxManager> manager,
+          std::shared_ptr<VoxbloxManager> manager_lowres,
+          std::shared_ptr<Params> params);
 
   ~RrtTree();
 
@@ -55,28 +59,28 @@ class RrtTree : public TreeBase<Eigen::Vector4d> {
 
   void setRootVicinity(double rootVicinity) override;
 
-  void publishNode(Node<StateVec> *node);
+  void publishNode(Node *node);
 
-  void gain2(StateVec &state);
+  double gain2(Pose &state);
 
-  void gain(StateVec state, double &maxGainFound, double &orientationFound);
+  void gain(Pose state, double &maxGainFound, double &orientationFound);
 
-  void compareGain(StateVec &state, double gain, double &maxGainFound,
+  void compareGain(Pose &state, double gain, double &maxGainFound,
                    double &orientationFound);
 
-  std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
+  std::vector<geometry_msgs::Pose> samplePath(Pose start, Pose end,
                                               const std::string &targetFrame);
 
-  void sampleBranch(const std::vector<Node<StateVec> *> &pathNodes,
+  void sampleBranch(const std::vector<Node *> &pathNodes,
                     std::vector<geometry_msgs::Pose> &result,
                     std::vector<geometry_msgs::Pose> &trajectory);
 
-  // virtual int getUnknownCells();
-
  protected:
   kdtree *kdTree_;
+  std::shared_ptr<VoxbloxManager> manager_;
+  std::shared_ptr<VoxbloxManager> manager_lowres_;
   double rootVicinity_;
-  std::stack<StateVec> history_;
+  std::stack<Pose> history_;
   int g_ID_;
   int iterationCount_;
   std::fstream fileTree_;
@@ -87,4 +91,5 @@ class RrtTree : public TreeBase<Eigen::Vector4d> {
   visualization_msgs::MarkerArray tree_msg_;
 };
 
+}  // namespace nbveplanner
 #endif

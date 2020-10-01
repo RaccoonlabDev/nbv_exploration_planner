@@ -1,27 +1,32 @@
-#ifndef RRTTREE_HPP_
-#define RRTTREE_HPP_
+#include "nbveplanner/rrt.h"
 
 #include <minkindr_conversions/kindr_tf.h>
-#include <nbveplanner/rrt.h>
 #include <cstdlib>
-#include <nbveplanner/tree.hpp>
+#include <utility>
+#include "nbveplanner/tree.h"
 
-RrtTree::RrtTree() : TreeBase<StateVec>::TreeBase() {
+namespace nbveplanner {
+
+RrtTree::RrtTree() : TreeBase::TreeBase() {
   kdTree_ = kd_create(3);
   iterationCount_ = 0;
 }
 
-RrtTree::RrtTree(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
-                 Params *params) {
-  manager_ = manager;
-  manager_lowres_ = manager_lowres;
-  params_ = params;
+RrtTree::RrtTree(std::shared_ptr<VoxbloxManager> manager,
+                 std::shared_ptr<VoxbloxManager> manager_lowres,
+                 std::shared_ptr<Params> params)
+    : manager_(std::move(manager)),
+      manager_lowres_(std::move(manager_lowres)),
+      TreeBase::TreeBase(std::move(params)) {
   kdTree_ = kd_create(3);
   iterationCount_ = 0;
+
   // Set camera FOV
   params_->camera_model_.setIntrinsicsFromFoV(
-      params_->camHorizontal_[0], params_->camVertical_[0],
-      params_->sensor_min_range_, params_->gainRange_);
+      params_->camera_hfov_, params_->camera_vfov_, params_->sensor_min_range_,
+      params_->gain_range_);
+  // Set Boundaries of Exploration
+  params_->camera_model_.setBoundingBox(params_->bbx_min_, params_->bbx_max_);
 }
 
 void RrtTree::visualizeFrustum() {
@@ -59,7 +64,7 @@ void RrtTree::visualizeFrustum() {
     visualization_msgs::Marker p;
     p.header.stamp = ros::Time::now();
     p.header.seq = g_ID_;
-    p.header.frame_id = params_->navigationFrame_;
+    p.header.frame_id = params_->frame_id_;
     p.ns = "frustum";
     p.type = visualization_msgs::Marker::LINE_LIST;
     p.action = visualization_msgs::Marker::ADD;
@@ -73,7 +78,7 @@ void RrtTree::visualizeFrustum() {
     p.color.g = 167.0 / 255.0;
     p.color.b = 0.0;
     p.color.a = 1.0;
-    params_->inspectionPath_.publish(p);
+    params_->inspection_path_.publish(p);
     rate.sleep();
   }
 }
@@ -98,7 +103,7 @@ void RrtTree::setStateFromPoseCovMsg(
   static tf::TransformListener listener;
   tf::StampedTransform transform;
   try {
-    listener.lookupTransform(params_->navigationFrame_, pose.header.frame_id,
+    listener.lookupTransform(params_->frame_id_, pose.header.frame_id,
                              pose.header.stamp, transform);
   } catch (tf::TransformException &ex) {
     ROS_ERROR("%s", ex.what());
@@ -114,18 +119,6 @@ void RrtTree::setStateFromPoseCovMsg(
   root_[1] = position.y();
   root_[2] = position.z();
   root_[3] = tf::getYaw(quat);
-
-  // Log the vehicle response in the planning frame
-  static double logThrottleTime = ros::Time::now().toSec();
-  if (ros::Time::now().toSec() - logThrottleTime > params_->log_throttle_) {
-    logThrottleTime += params_->log_throttle_;
-    if (params_->log_) {
-      for (int i = 0; i < root_.size() - 1; i++) {
-        fileResponse_ << root_[i] << ",";
-      }
-      fileResponse_ << root_[root_.size() - 1] << "\n";
-    }
-  }
 }
 
 void RrtTree::setStateFromOdometryMsg(const nav_msgs::Odometry &pose) {
@@ -133,7 +126,7 @@ void RrtTree::setStateFromOdometryMsg(const nav_msgs::Odometry &pose) {
   static tf::TransformListener listener;
   tf::StampedTransform transform;
   try {
-    listener.lookupTransform(params_->navigationFrame_, pose.header.frame_id,
+    listener.lookupTransform(params_->frame_id_, pose.header.frame_id,
                              pose.header.stamp, transform);
   } catch (tf::TransformException &ex) {
     ROS_ERROR("%s", ex.what());
@@ -149,25 +142,13 @@ void RrtTree::setStateFromOdometryMsg(const nav_msgs::Odometry &pose) {
   root_[1] = position.y();
   root_[2] = position.z();
   root_[3] = tf::getYaw(quat);
-
-  // Log the vehicle response in the planning frame
-  static double logThrottleTime = ros::Time::now().toSec();
-  if (ros::Time::now().toSec() - logThrottleTime > params_->log_throttle_) {
-    logThrottleTime += params_->log_throttle_;
-    if (params_->log_) {
-      for (int i = 0; i < root_.size() - 1; i++) {
-        fileResponse_ << root_[i] << ",";
-      }
-      fileResponse_ << root_[root_.size() - 1] << "\n";
-    }
-  }
 }
 
 void RrtTree::iterate() {
   // In this function a new configuration is sampled and added to the tree.
-  StateVec newState;
+  Pose newState;
 
-  Node<StateVec> *newParent;
+  Node *newParent;
   Eigen::Vector3d origin;
   Eigen::Vector3d direction;
   bool solutionFound = false;
@@ -184,13 +165,13 @@ void RrtTree::iterate() {
       continue;
     // Offset new state by root
     newState += rootNode_->state_;
-
-    if (newState.x() < params_->minX_ + 0.5 * params_->boundingBox_.x() or
-        newState.y() < params_->minY_ + 0.5 * params_->boundingBox_.y() or
-        newState.z() < params_->minZ_ + 0.5 * params_->boundingBox_.z() or
-        newState.x() > params_->maxX_ - 0.5 * params_->boundingBox_.x() or
-        newState.y() > params_->maxY_ - 0.5 * params_->boundingBox_.y() or
-        newState.z() > params_->maxZ_ - 0.5 * params_->boundingBox_.z()) {
+    // TODO: Write function to compare elementwise
+    if (newState.x() < params_->bbx_min_.x() + params_->robot_radius_ or
+        newState.y() < params_->bbx_min_.y() + params_->robot_radius_ or
+        newState.z() < params_->bbx_min_.z() + params_->robot_radius_ or
+        newState.x() > params_->bbx_max_.x() - params_->robot_radius_ or
+        newState.y() > params_->bbx_max_.y() - params_->robot_radius_ or
+        newState.z() > params_->bbx_max_.z() - params_->robot_radius_) {
       continue;
     }
     solutionFound = true;
@@ -202,7 +183,7 @@ void RrtTree::iterate() {
       kd_res_free(nearest);
       return;
     }
-    newParent = (Node<StateVec> *)kd_res_item_data(nearest);
+    newParent = (Node *)kd_res_item_data(nearest);
     kd_res_free(nearest);
 
     // Check for collision of new connection plus some overshoot distance.
@@ -211,8 +192,8 @@ void RrtTree::iterate() {
     direction =
         Eigen::Vector3d(newState[0] - origin[0], newState[1] - origin[1],
                         newState[2] - origin[2]);
-    if (direction.norm() > params_->extensionRange_) {
-      direction = params_->extensionRange_ * direction.normalized();
+    if (direction.norm() > params_->extension_range_) {
+      direction = params_->extension_range_ * direction.normalized();
     }
     newState[0] = origin[0] + direction[0];
     newState[1] = origin[1] + direction[1];
@@ -220,13 +201,13 @@ void RrtTree::iterate() {
 
     if (manager_->checkMotion(
             origin, direction + origin +
-                        direction.normalized() * params_->dOvershoot_)) {
-      double maxGainFound = -DBL_MAX;
+                        direction.normalized() * params_->dist_overshoot_)) {
+      /*double maxGainFound = -DBL_MAX;
       double orientationFound;
       newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
       std::thread t1(&RrtTree::gain, this, newState, std::ref(maxGainFound),
                      std::ref(orientationFound));
-      /*newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
+      newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
       std::thread t2(&RrtTree::gain, this, newState, std::ref(maxGainFound),
                      std::ref(orientationFound), params_->camera_model_);
       newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
@@ -234,21 +215,22 @@ void RrtTree::iterate() {
                      std::ref(orientationFound), params_->camera_model_);
       newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
       std::thread t4(&RrtTree::gain, this, newState, std::ref(maxGainFound),
-                     std::ref(orientationFound), params_->camera_model_);*/
+                     std::ref(orientationFound), params_->camera_model_);
 
       t1.join();
-      // t2.join();
-      // t3.join();
-      // t4.join();
-      newState[3] = orientationFound;
+      t2.join();
+      t3.join();
+      t4.join();
+      newState[3] = orientationFound;*/
+      double gain = gain2(newState);
       // Create new node and insert into tree
-      auto *newNode = new Node<StateVec>;
+      auto *newNode = new Node;
       newNode->state_ = newState;
       newNode->parent_ = newParent;
       newNode->distance_ = newParent->distance_ + direction.norm();
       newParent->children_.emplace_back(newNode);
       newNode->gain_ =
-          maxGainFound * exp(-params_->degressiveCoeff_ * newNode->distance_);
+          gain * exp(-params_->degressive_coeff_ * newNode->distance_);
       // std::cout << "Gain: " << newNode->gain_ << std::endl;
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -277,17 +259,7 @@ void RrtTree::initialize(bool seedHistory) {
   // Initialize kd-tree with root node and prepare log file
   kdTree_ = kd_create(3);
 
-  if (params_->log_) {
-    if (fileTree_.is_open()) {
-      fileTree_.close();
-    }
-    fileTree_.open(
-        (logFilePath_ + "tree" + std::to_string(iterationCount_) + ".txt")
-            .c_str(),
-        std::ios::out);
-  }
-
-  rootNode_ = new Node<StateVec>;
+  rootNode_ = new Node;
   rootNode_->distance_ = 0.0;
   rootNode_->gain_ = params_->zero_gain_;
   rootNode_->parent_ = nullptr;
@@ -306,36 +278,38 @@ void RrtTree::initialize(bool seedHistory) {
   visualization_msgs::Marker p;
   p.header.stamp = ros::Time::now();
   p.header.seq = 0;
-  p.header.frame_id = params_->navigationFrame_;
+  p.header.frame_id = params_->frame_id_;
   p.id = 0;
   p.ns = "workspace";
   p.type = visualization_msgs::Marker::CUBE;
   p.action = visualization_msgs::Marker::ADD;
-  p.pose.position.x = 0.5 * (params_->minX_ + params_->maxX_);
-  p.pose.position.y = 0.5 * (params_->minY_ + params_->maxY_);
-  p.pose.position.z = 0.5 * (params_->minZ_ + params_->maxZ_);
+  Eigen::Vector3d tmp = 0.5 * (params_->bbx_min_ + params_->bbx_max_);
+  p.pose.position.x = tmp.x();
+  p.pose.position.y = tmp.y();
+  p.pose.position.z = tmp.z();
   tf::Quaternion quat;
   quat.setEuler(0.0, 0.0, 0.0);
   p.pose.orientation.x = quat.x();
   p.pose.orientation.y = quat.y();
   p.pose.orientation.z = quat.z();
   p.pose.orientation.w = quat.w();
-  p.scale.x = params_->maxX_ - params_->minX_;
-  p.scale.y = params_->maxY_ - params_->minY_;
-  p.scale.z = params_->maxZ_ - params_->minZ_;
+  tmp = params_->bbx_max_ - params_->bbx_min_;
+  p.scale.x = tmp.x();
+  p.scale.y = tmp.y();
+  p.scale.z = tmp.z();
   p.color.r = 200.0 / 255.0;
   p.color.g = 100.0 / 255.0;
   p.color.b = 0.0;
   p.color.a = 0.1;
   p.frame_locked = false;
-  params_->inspectionPath_.publish(p);
+  params_->inspection_path_.publish(p);
 }
 
 void RrtTree::getBestBranch(std::vector<geometry_msgs::Pose> &path,
                             std::vector<geometry_msgs::Pose> &trajectory) {
   // This function returns the best branch
-  Node<StateVec> *current = bestNode_->parent_;
-  std::vector<Node<StateVec> *> pathNodes;
+  Node *current = bestNode_->parent_;
+  std::vector<Node *> pathNodes;
   pathNodes.emplace_back(bestNode_);
   while (current->parent_ != nullptr) {
     if (not manager_->checkMotion(pathNodes.back()->state_,
@@ -352,7 +326,7 @@ void RrtTree::getBestBranch(std::vector<geometry_msgs::Pose> &path,
 std::vector<geometry_msgs::Pose> RrtTree::getBestEdge(std::string targetFrame) {
   // This function returns the first edge of the best branch
   std::vector<geometry_msgs::Pose> ret;
-  Node<StateVec> *current = bestNode_;
+  Node *current = bestNode_;
   if (current->parent_ != nullptr) {
     while (current->parent_ != rootNode_ && current->parent_ != nullptr) {
       current = current->parent_;
@@ -364,86 +338,133 @@ std::vector<geometry_msgs::Pose> RrtTree::getBestEdge(std::string targetFrame) {
   return ret;
 }
 
-void RrtTree::gain2(StateVec &state) {
-  double gain = 0.0;
+double RrtTree::gain2(Pose &state) {
+  static const double voxel_size = manager_lowres_->getResolution();
+  static const double voxel_size_inv = 1.0 / voxel_size;
+  static const int voxels_per_side = manager_lowres_->getVoxelsPerSide();
+  static const double voxels_per_side_inv = 1.0 / voxels_per_side;
+  const Point position_mav(state[0], state[1], state[2]);
+  voxblox::HierarchicalIndexSet checked_voxels_set;
+  Eigen::Quaterniond orientation;
+  Transformation T_G_B;
+  double yaw;
+  AlignedVector<Point> plane_points;
+  Point u_distance, u_slope, v_center;
+  int u_max;
+  AlignedVector<double> vertical_gain;
+  vertical_gain.reserve(360);
+  for (int i = -180; i < 180; ++i) {
+    yaw = M_PI * i / 180.0;
+    orientation = Eigen::AngleAxisd(yaw, Point::UnitZ());
+    T_G_B = Transformation(position_mav, orientation);
+    params_->camera_model_.setBodyPose(T_G_B);
+    const Point camera_position =
+        params_->camera_model_.getCameraPose().getPosition();
 
-  Eigen::Vector3d origin(state[0], state[1], state[2]);
-  double one_deg = M_PI / 180.0;
-  double height = -M_PI * (params_->camVertical_[0] / 2.0) / 180.0;
-  Eigen::Vector3d goal;
-  double pre_x, pre_y;
-  VoxbloxManager::VoxelStatus status;
-  for (double hfov = -M_PI; hfov < M_PI; hfov += one_deg) {
-    pre_x = params_->gainRange_ * cos(hfov);
-    pre_y = params_->gainRange_ * sin(hfov);
-    for (double vfov = -height; vfov < height; vfov += one_deg) {
-      goal.x() = pre_x * sin(vfov);
-      goal.y() = pre_y * sin(vfov);
-      goal.z() = params_->gainRange_ * cos(vfov);
-    }
-  }
+    // Get the three points defining the back plane of the camera frustum.
+    params_->camera_model_.getFarPlanePoints(&plane_points);
 
-  Eigen::Vector3d vec;
-  double rangeSq = pow(params_->gainRange_, 2.0);
-  double res = manager_lowres_->getResolution();
-  // Iterate over all nodes within the allowed distance
-  for (vec[0] = std::max(state[0] - params_->gainRange_, params_->minX_);
-       vec[0] < std::min(state[0] + params_->gainRange_, params_->maxX_);
-       vec[0] += res) {
-    for (vec[1] = std::max(state[1] - params_->gainRange_, params_->minY_);
-         vec[1] < std::min(state[1] + params_->gainRange_, params_->maxY_);
-         vec[1] += res) {
-      for (vec[2] = std::max(state[2] - params_->gainRange_, params_->minZ_);
-           vec[2] < std::min(state[2] + params_->gainRange_, params_->maxZ_);
-           vec[2] += res) {
-        Eigen::Vector3d dir = vec - origin;
-        // Skip if distance is too large
-        if (dir.transpose().dot(dir) > rangeSq) {
-          continue;
+    // We map the plane into u and v coordinates, which are the plane's
+    // coordinate system, with the origin at plane_points[1] and outer bounds at
+    // plane_points[0] and plane_points[2].
+    u_distance = plane_points[0] - plane_points[1];
+    u_slope = u_distance.normalized();
+    u_max = static_cast<int>(std::ceil(u_distance.norm() * voxel_size_inv));
+    v_center = (plane_points[2] - plane_points[1]) / 2.0;
+
+    Point pos;
+    double gain = 0.0;
+    voxblox::GlobalIndex global_voxel_idx;
+    voxblox::BlockIndex block_index;
+    voxblox::VoxelIndex voxel_index;
+    // We then iterate over all the voxels in the coordinate space of the
+    // horizontal center back bounding plane of the frustum.
+    for (int u = 0; u < u_max; ++u) {
+      // Get the 'real' coordinates back from the plane coordinate space.
+      pos = plane_points[1] + u * u_slope * voxel_size + v_center;
+
+      global_voxel_idx =
+          (voxel_size_inv * pos).cast<voxblox::LongIndexElement>();
+      block_index = voxblox::getBlockIndexFromGlobalVoxelIndex(
+          global_voxel_idx, voxels_per_side_inv);
+      voxel_index = voxblox::getLocalFromGlobalVoxelIndex(global_voxel_idx,
+                                                          voxels_per_side);
+      if (checked_voxels_set[block_index].count(voxel_index) > 0) {
+        continue;
+      }
+
+      const voxblox::Point start_scaled = (camera_position * voxel_size_inv).cast<voxblox::FloatingPoint>();
+      const voxblox::Point end_scaled = (pos * voxel_size_inv).cast<voxblox::FloatingPoint>();
+
+      voxblox::LongIndexVector global_voxel_indices;
+      voxblox::castRay(start_scaled, end_scaled, &global_voxel_indices);
+
+      voxblox::BlockIndex block_index_ray;
+      voxblox::VoxelIndex voxel_index_ray;
+
+      for (const voxblox::GlobalIndex &global_index_ray :
+           global_voxel_indices) {
+        block_index_ray = voxblox::getBlockIndexFromGlobalVoxelIndex(
+            global_index_ray, voxels_per_side_inv);
+        voxel_index_ray = voxblox::getLocalFromGlobalVoxelIndex(
+            global_index_ray, voxels_per_side);
+
+        bool voxel_checked = false;
+        if (checked_voxels_set[block_index_ray].count(voxel_index_ray) > 0) {
+          voxel_checked = true;
         }
-        bool insideAFieldOfView = false;
-        // Check that voxel center is inside one of the fields of view.
-        for (auto &camBoundNormal : params_->camBoundNormals_) {
-          bool inThisFieldOfView = true;
-          for (auto &itSingleCBN : camBoundNormal) {
-            Eigen::Vector3d normal =
-                Eigen::AngleAxisd(state[3], Eigen::Vector3d::UnitZ()) *
-                itSingleCBN;
-            double val = dir.dot(normal.normalized());
-            if (val < SQRT2 * res) {
-              inThisFieldOfView = false;
-              break;
-            }
-          }
-          if (inThisFieldOfView) {
-            insideAFieldOfView = true;
+
+        Point recovered_pos = global_index_ray.cast<double>() * voxel_size;
+        if (not voxel_checked and
+            params_->camera_model_.isPointInView(recovered_pos)) {
+          VoxbloxManager::VoxelStatus status =
+              manager_lowres_->getVoxelStatus(block_index_ray, voxel_index_ray);
+          if (status == VoxbloxManager::kUnknown) {
+            gain += params_->gain_unmapped_;
+          } else if (status == VoxbloxManager::kOccupied) {
+            gain += params_->gain_occupied_;
             break;
-          }
-        }
-        if (!insideAFieldOfView) {
-          continue;
-        }
-
-        if (VoxbloxManager::kOccupied !=
-            this->manager_lowres_->getVisibility(origin, vec, false)) {
-          VoxbloxManager::VoxelStatus node =
-              manager_lowres_->getVoxelStatus(vec);
-          if (node == VoxbloxManager::kUnknown) {
-            gain += params_->igUnmapped_;
-          } else if (node == VoxbloxManager::kOccupied) {
-            gain += params_->igOccupied_;
           } else {
-            gain += params_->igFree_;
+            gain += params_->gain_free_;
           }
         }
       }
     }
+    vertical_gain[i + 180] = gain;
   }
-  gain *= pow(res, 3.0);
+  double max_gain = 0.0;
+  int max_gain_yaw;
+  double current_gain;
+  static const int half_hfov = std::floor(params_->camera_hfov_ / 2.0);
+  for (int i = -180; i < 180; i += 5) {
+    current_gain = 0.0;
+    int left_idx = (i + 180) - half_hfov;
+    if (left_idx < 0) {
+      for (int j = 360 + left_idx; j < 360; ++j) {
+        current_gain += vertical_gain[j];
+      }
+      left_idx = 0;
+    }
+    int right_idx = (i + 180) + half_hfov;
+    if (right_idx >= 360) {
+      for (int j = 0; j < right_idx - 359; ++j) {
+        current_gain += vertical_gain[j];
+      }
+      right_idx = 359;
+    }
+    for (int j = left_idx; j <= right_idx; ++j) {
+      current_gain += vertical_gain[j];
+    }
+    if (current_gain > max_gain) {
+      max_gain = current_gain;
+      max_gain_yaw = i;
+    }
+  }
+  state[3] = max_gain_yaw * M_PI / 180.0;
+  return max_gain*pow(voxel_size, 3.0);
 }
 
-void RrtTree::gain(StateVec state, double &maxGainFound,
-                   double &orientationFound) {
+void RrtTree::gain(Pose state, double &maxGainFound, double &orientationFound) {
   double gain = 0.0;
   int checked_voxels = 0;
 
@@ -458,8 +479,8 @@ void RrtTree::gain(StateVec state, double &maxGainFound,
   params_->camera_model_.getAabb(&aabb_min, &aabb_max);
 
   // Get the center of the camera to raycast to.
-  Transformation camera_pose = params_->camera_model_.getCameraPose();
-  Point camera_center = camera_pose.getPosition();
+  // Transformation camera_pose = params_->camera_model_.getCameraPose();
+  // Point camera_center = camera_pose.getPosition();
 
   Point point;
   // double rangeSq = pow(params_->gainRange_, 2.0);
@@ -476,11 +497,11 @@ void RrtTree::gain(StateVec state, double &maxGainFound,
             VoxbloxManager::VoxelStatus node =
                 manager_lowres_->getVoxelStatus(point);
             if (node == VoxbloxManager::kUnknown) {
-              gain += params_->igUnmapped_;
+              gain += params_->gain_unmapped_;
             } else if (node == VoxbloxManager::kOccupied) {
-              gain += params_->igOccupied_;
+              gain += params_->gain_occupied_;
             } else {
-              gain += params_->igFree_;
+              gain += params_->gain_free_;
             }
           }
         }
@@ -492,7 +513,7 @@ void RrtTree::gain(StateVec state, double &maxGainFound,
   compareGain(state, gain, maxGainFound, orientationFound);
 }
 
-void RrtTree::compareGain(StateVec &state, double gain, double &maxGainFound,
+void RrtTree::compareGain(Pose &state, double gain, double &maxGainFound,
                           double &orientationFound) {
   std::lock_guard<std::mutex> guard(myMutex);
   if (gain > maxGainFound) {
@@ -519,7 +540,7 @@ void RrtTree::clear() {
   visualization_msgs::Marker p;
   p.action = visualization_msgs::Marker::DELETEALL;
   tree_msg_.markers.emplace_back(p);
-  params_->explorationTree_.publish(tree_msg_);
+  params_->exploration_tree_.publish(tree_msg_);
   tree_msg_.markers.clear();
   counter_ = 0;
   bestGain_ = params_->zero_gain_;
@@ -533,16 +554,16 @@ void RrtTree::reset() {
   visualization_msgs::Marker p;
   p.action = visualization_msgs::Marker::DELETEALL;
   tree_msg_.markers.emplace_back(p);
-  params_->explorationTree_.publish(tree_msg_);
+  params_->exploration_tree_.publish(tree_msg_);
   tree_msg_.markers.clear();
-  std::stack<StateVec>().swap(history_);
+  std::stack<Pose>().swap(history_);
 }
 
-void RrtTree::publishNode(Node<StateVec> *node) {
+void RrtTree::publishNode(Node *node) {
   visualization_msgs::Marker p;
   p.header.stamp = ros::Time::now();
   p.header.seq = g_ID_;
-  p.header.frame_id = params_->navigationFrame_;
+  p.header.frame_id = params_->frame_id_;
   p.id = g_ID_;
   g_ID_++;
   p.ns = "vp_tree";
@@ -557,7 +578,7 @@ void RrtTree::publishNode(Node<StateVec> *node) {
   p.pose.orientation.y = quat.y();
   p.pose.orientation.z = quat.z();
   p.pose.orientation.w = quat.w();
-  p.scale.x = std::max(node->gain_ - params_->zero_gain_, 0.05);
+  p.scale.x = std::min(node->gain_ - params_->zero_gain_, 0.5);
   p.scale.y = 0.1;
   p.scale.z = 0.1;
   p.color.r = 167.0 / 255.0;
@@ -569,12 +590,12 @@ void RrtTree::publishNode(Node<StateVec> *node) {
   // params_->inspectionPath_.publish(p);
 
   if (!node->parent_) {
-    params_->explorationTree_.publish(tree_msg_);
+    params_->exploration_tree_.publish(tree_msg_);
     return;
   }
   p.header.stamp = ros::Time::now();
   p.header.seq = g_ID_;
-  p.header.frame_id = params_->navigationFrame_;
+  p.header.frame_id = params_->frame_id_;
   p.id = g_ID_;
   g_ID_++;
   p.ns = "vp_branches";
@@ -602,31 +623,13 @@ void RrtTree::publishNode(Node<StateVec> *node) {
   p.color.b = 0.7;
   p.color.a = 1.0;
   tree_msg_.markers.emplace_back(p);
-  params_->explorationTree_.publish(tree_msg_);
-
-  if (params_->log_) {
-    for (int i = 0; i < node->state_.size(); i++) {
-      fileTree_ << node->state_[i] << ",";
-    }
-    fileTree_ << node->gain_ << ",";
-    for (int i = 0; i < node->parent_->state_.size(); i++) {
-      fileTree_ << node->parent_->state_[i] << ",";
-    }
-    fileTree_ << node->parent_->gain_ << "\n";
-  }
+  params_->exploration_tree_.publish(tree_msg_);
 }
 
 std::vector<geometry_msgs::Pose> RrtTree::samplePath(
-    StateVec start, StateVec end, const std::string &targetFrame) {
+    Pose start, Pose end, const std::string &targetFrame) {
   std::vector<geometry_msgs::Pose> ret;
   static tf::TransformListener listener;
-  /*tf::StampedTransform transform;
-  try {
-      listener.lookupTransform(targetFrame, params_->navigationFrame_,
-  ros::Time(0), transform); } catch (tf::TransformException &ex) {
-      ROS_ERROR("%s", ex.what());
-      return ret;
-  }*/
   Eigen::Vector3d distance(end[0] - start[0], end[1] - start[1],
                            end[2] - start[2]);
   double yaw_direction = end[3] - start[3];
@@ -655,17 +658,11 @@ std::vector<geometry_msgs::Pose> RrtTree::samplePath(
     geometry_msgs::Pose pose;
     tf::poseTFToMsg(poseTF, pose);
     ret.push_back(pose);
-    if (params_->log_) {
-      filePath_ << poseTF.getOrigin().x() << ",";
-      filePath_ << poseTF.getOrigin().y() << ",";
-      filePath_ << poseTF.getOrigin().z() << ",";
-      filePath_ << tf::getYaw(poseTF.getRotation()) << "\n";
-    }
   }
   return ret;
 }
 
-void RrtTree::sampleBranch(const std::vector<Node<StateVec> *> &pathNodes,
+void RrtTree::sampleBranch(const std::vector<Node *> &pathNodes,
                            std::vector<geometry_msgs::Pose> &result,
                            std::vector<geometry_msgs::Pose> &trajectory) {
   if (not trajectory.empty()) {
@@ -673,8 +670,8 @@ void RrtTree::sampleBranch(const std::vector<Node<StateVec> *> &pathNodes,
         tf::getYaw(trajectory.back().orientation);
   }
   for (auto iter = pathNodes.rbegin(); (iter + 1) != pathNodes.rend(); ++iter) {
-    StateVec start = (*iter)->state_;
-    StateVec end = (*(iter + 1))->state_;
+    Pose start = (*iter)->state_;
+    Pose end = (*(iter + 1))->state_;
     history_.push(start);
 
     Eigen::Vector3d distance(end[0] - start[0], end[1] - start[1],
@@ -707,4 +704,4 @@ void RrtTree::sampleBranch(const std::vector<Node<StateVec> *> &pathNodes,
   }
 }
 
-#endif
+}  // namespace nbveplanner
