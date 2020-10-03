@@ -2,9 +2,9 @@
 #define NBVEPLANNER_TREE_H_
 
 #include "nbveplanner/camera_model.h"
+#include "nbveplanner/common.h"
 #include "nbveplanner/params.h"
 #include "nbveplanner/voxblox_manager.h"
-#include "nbveplanner/common.h"
 
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
@@ -26,6 +26,7 @@ class Node {
   std::vector<Node *> children_;
   double gain_;
   double distance_;
+  int id_;
 };
 
 class TreeBase {

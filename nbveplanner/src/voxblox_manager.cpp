@@ -8,8 +8,12 @@ namespace nbveplanner {
 
 VoxbloxManager::VoxbloxManager(const ros::NodeHandle &nh,
                                const ros::NodeHandle &nh_private,
+                               std::shared_ptr<Params> params,
                                const std::string &ns)
-    : nh_(nh), nh_private_(nh_private), esdf_server_(nh, nh_private, ns) {
+    : nh_(nh),
+      nh_private_(nh_private),
+      esdf_server_(nh, nh_private, ns),
+      params_(std::move(params)) {
   tsdf_layer_ = esdf_server_.getTsdfMapPtr()->getTsdfLayerPtr();
   esdf_layer_ = esdf_server_.getEsdfMapPtr()->getEsdfLayerPtr();
   CHECK_NOTNULL(tsdf_layer_);
@@ -61,7 +65,7 @@ bool VoxbloxManager::checkCollisionWithRobotAtVoxel(
   if (voxel == nullptr) {
     return true;
   }
-  return robot_radius_ >= voxel->distance;
+  return params_->robot_radius_ >= voxel->distance;
 }
 
 bool VoxbloxManager::checkMotion(const Point &start, const Point &end) {

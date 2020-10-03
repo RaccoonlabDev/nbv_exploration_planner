@@ -61,6 +61,8 @@ class RrtTree : public TreeBase {
 
   void publishNode(Node *node);
 
+  void modifyColorNode(const int id);
+
   double gain2(Pose &state);
 
   void gain(Pose state, double &maxGainFound, double &orientationFound);

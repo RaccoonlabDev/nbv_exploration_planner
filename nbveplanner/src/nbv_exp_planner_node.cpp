@@ -310,7 +310,6 @@ bool manager_srv(nbv_msgs::SetState::Request &req,
 }
 
 int main(int argc, char **argv) {
-  VLOG(5) << "First line";
   ros::init(argc, argv, "nbvePlanner");
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -319,11 +318,9 @@ int main(int argc, char **argv) {
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
 
-  VLOG(5) << "I initialized planner node";
 
   FLAGS_alsologtostderr = true;
   planner = std::make_unique<nbveplanner::nbvePlanner>(nh, nh_private);
-  VLOG(5) << "I initialized planner pointer";
 
   // PUBLISHERS
   pose_pub = nh.advertise<geometry_msgs::PoseStamped>("position_control", 10);

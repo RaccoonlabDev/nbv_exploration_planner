@@ -85,7 +85,7 @@ struct Params {
     VLOG(5) << "cutoff_iterations: " << cutoff_iterations_;
     nh.param("nbvep/gain/zero", zero_gain_, zero_gain_);
     VLOG(5) << "zero_gain: " << zero_gain_;
-    nh.param("system/bbx/overshoot", dist_overshoot_, dist_overshoot_);
+    nh.param("system/overshoot", dist_overshoot_, dist_overshoot_);
     VLOG(5) << "overshoot: " << dist_overshoot_;
     nh.param("tf_frame", frame_id_, frame_id_);
     VLOG(5) << "frame_id: " << frame_id_;

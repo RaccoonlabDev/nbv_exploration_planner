@@ -2,23 +2,23 @@
 
 namespace nbveplanner {
 
-nbvePlanner::nbvePlanner(
-    const ros::NodeHandle &nh, const ros::NodeHandle &nh_private)
+nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
+                         const ros::NodeHandle &nh_private)
     : nh_(nh), nh_private_(nh_private), params_(new Params()) {
   params_->setParametersFromRos(nh_private_);
   params_->inspection_path_ =
       nh_.advertise<visualization_msgs::Marker>("inspectionPath", 1);
   params_->exploration_tree_ =
       nh_.advertise<visualization_msgs::MarkerArray>("explorationTree", 100);
-  posCovClient_ = nh_.subscribe("pose_cov", 10,
-                                &nbvePlanner::poseCovCallback, this);
-  odomClient_ =
-      nh_.subscribe("odometry", 10, &nbvePlanner::odomCallback, this);
+  posCovClient_ =
+      nh_.subscribe("pose_cov", 10, &nbvePlanner::poseCovCallback, this);
+  odomClient_ = nh_.subscribe("odometry", 10, &nbvePlanner::odomCallback, this);
 
   nh_private_.param<std::string>("namespace_lowres_map", ns_map_, "lowres/");
 
-  manager_ = std::make_shared<VoxbloxManager>(nh, nh_private, "");
-  manager_lowres_ = std::make_shared<VoxbloxManager>(nh, nh_private, ns_map_);
+  manager_ = std::make_shared<VoxbloxManager>(nh, nh_private, params_, "");
+  manager_lowres_ =
+      std::make_shared<VoxbloxManager>(nh, nh_private, params_, ns_map_);
   hist_ = std::make_unique<History>(nh, nh_private, manager_, manager_lowres_,
                                     params_);
   tree_ = std::make_unique<RrtTree>(manager_, manager_lowres_, params_);
@@ -39,17 +39,14 @@ void nbvePlanner::poseCovCallback(
   ready_ = true;
 }
 
-void nbvePlanner::odomCallback(
-    const nav_msgs::Odometry &pose) {
+void nbvePlanner::odomCallback(const nav_msgs::Odometry &pose) {
   local_position_ = pose.pose.pose;
   tree_->setStateFromOdometryMsg(pose);
   // Planner is now ready to plan.
   ready_ = true;
 }
 
-bool nbvePlanner::isReady() const {
-  return ready_;
-}
+bool nbvePlanner::isReady() const { return ready_; }
 
 bool nbvePlanner::isExplorationComplete() const {
   return exploration_complete_;
@@ -175,8 +172,7 @@ bool nbvePlanner::plannerCallback(
   return true;
 }
 
-bool nbvePlanner::goHome(
-    std::vector<geometry_msgs::Pose> &path) const {
+bool nbvePlanner::goHome(std::vector<geometry_msgs::Pose> &path) const {
   path = hist_->getPathToNode(hist_->home_pos_);
   if (path.empty()) {
     return false;
@@ -193,8 +189,7 @@ bool nbvePlanner::reset() {
   return true;
 }
 
-void nbvePlanner::setDroneExploration(
-    bool drone_exploring) const {
+void nbvePlanner::setDroneExploration(bool drone_exploring) const {
   hist_->setDroneExploring(drone_exploring);
 }
 
@@ -203,4 +198,4 @@ void nbvePlanner::initializeHistoryGraph(
   hist_->addVertex(initial_position);
 }
 
-}
+}  // namespace nbveplanner

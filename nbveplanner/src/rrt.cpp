@@ -156,22 +156,16 @@ void RrtTree::iterate() {
   std::mt19937 generator(
       std::chrono::steady_clock::now().time_since_epoch().count());
   std::uniform_real_distribution<double> distribution(0.0, 1.0);
+  double radius_sqrt = SQ(rootVicinity_);
   while (!solutionFound) {
     for (int i = 0; i < 3; i++) {
       newState[i] = 2.0 * rootVicinity_ * (distribution(generator) - 0.5);
     }
-    if (SQ(newState[0]) + SQ(newState[1]) + SQ(newState[2]) >
-        pow(rootVicinity_, 2.0))
+    if (SQ(newState[0]) + SQ(newState[1]) + SQ(newState[2]) > radius_sqrt)
       continue;
     // Offset new state by root
     newState += rootNode_->state_;
-    // TODO: Write function to compare elementwise
-    if (newState.x() < params_->bbx_min_.x() + params_->robot_radius_ or
-        newState.y() < params_->bbx_min_.y() + params_->robot_radius_ or
-        newState.z() < params_->bbx_min_.z() + params_->robot_radius_ or
-        newState.x() > params_->bbx_max_.x() - params_->robot_radius_ or
-        newState.y() > params_->bbx_max_.y() - params_->robot_radius_ or
-        newState.z() > params_->bbx_max_.z() - params_->robot_radius_) {
+    if (not isInsideBounds(params_->bbx_min_, params_->bbx_max_, newState)) {
       continue;
     }
     solutionFound = true;
@@ -231,6 +225,7 @@ void RrtTree::iterate() {
       newParent->children_.emplace_back(newNode);
       newNode->gain_ =
           gain * exp(-params_->degressive_coeff_ * newNode->distance_);
+      newNode->id_ = g_ID_;
       // std::cout << "Gain: " << newNode->gain_ << std::endl;
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
@@ -307,6 +302,7 @@ void RrtTree::initialize(bool seedHistory) {
 
 void RrtTree::getBestBranch(std::vector<geometry_msgs::Pose> &path,
                             std::vector<geometry_msgs::Pose> &trajectory) {
+  modifyColorNode(bestNode_->id_);
   // This function returns the best branch
   Node *current = bestNode_->parent_;
   std::vector<Node *> pathNodes;
@@ -393,8 +389,10 @@ double RrtTree::gain2(Pose &state) {
         continue;
       }
 
-      const voxblox::Point start_scaled = (camera_position * voxel_size_inv).cast<voxblox::FloatingPoint>();
-      const voxblox::Point end_scaled = (pos * voxel_size_inv).cast<voxblox::FloatingPoint>();
+      const voxblox::Point start_scaled =
+          (camera_position * voxel_size_inv).cast<voxblox::FloatingPoint>();
+      const voxblox::Point end_scaled =
+          (pos * voxel_size_inv).cast<voxblox::FloatingPoint>();
 
       voxblox::LongIndexVector global_voxel_indices;
       voxblox::castRay(start_scaled, end_scaled, &global_voxel_indices);
@@ -461,7 +459,7 @@ double RrtTree::gain2(Pose &state) {
     }
   }
   state[3] = max_gain_yaw * M_PI / 180.0;
-  return max_gain*pow(voxel_size, 3.0);
+  return max_gain * pow(voxel_size, 3.0);
 }
 
 void RrtTree::gain(Pose state, double &maxGainFound, double &orientationFound) {
@@ -578,7 +576,7 @@ void RrtTree::publishNode(Node *node) {
   p.pose.orientation.y = quat.y();
   p.pose.orientation.z = quat.z();
   p.pose.orientation.w = quat.w();
-  p.scale.x = std::min(node->gain_ - params_->zero_gain_, 0.5);
+  p.scale.x = std::min(node->gain_, 0.5);
   p.scale.y = 0.1;
   p.scale.z = 0.1;
   p.color.r = 167.0 / 255.0;
@@ -623,6 +621,13 @@ void RrtTree::publishNode(Node *node) {
   p.color.b = 0.7;
   p.color.a = 1.0;
   tree_msg_.markers.emplace_back(p);
+  params_->exploration_tree_.publish(tree_msg_);
+}
+
+void RrtTree::modifyColorNode(const int id) {
+  tree_msg_.markers[id].color.r = 0.0;
+  tree_msg_.markers[id].color.g = 1.0;
+  tree_msg_.markers[id].color.b = 0.0;
   params_->exploration_tree_.publish(tree_msg_);
 }
 

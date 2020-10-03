@@ -3,22 +3,23 @@ system/dyaw_max: 0.8
 system/camera/pitch: 0.0
 system/camera/hfov: 86.0
 system/camera/vfov: 57.0
-system/robot_radius: 0.7
+system/robot_radius: 0.6
+system/overshoot: 0.25
 
 nbvep/gain/free: 0.0
 nbvep/gain/occupied: 0.0
 nbvep/gain/unmapped: 1.0
 nbvep/gain/range: 3.0
-nbvep/gain/zero: 2.0
-nbvep/gain/degressive_coeff: 0.25
+nbvep/gain/zero: 5.0
+nbvep/gain/degressive_coeff: 0.0
 
-nbvep/tree/extension_range: 5.0
+nbvep/tree/extension_range: 1.0
 nbvep/tree/vicinity_range: 6.0
-nbvep/tree/init_iterations: 5
+nbvep/tree/init_iterations: 15
 nbvep/tree/cutoff_iterations: 100
 nbvep/dt: 0.1
 
-nbvep/graph/zero_frontier_voxels: 12.0
+nbvep/graph/zero_frontier_voxels: 13.0
 nbvep/graph/node_vicinity_range: 5.0
 
 # bounding box: necessary to limit the volume
@@ -29,4 +30,4 @@ bbx/maxY: 13.0
 bbx/minY: -1.0
 
 bbx/maxZ: 3.0
-bbx/minZ: 1.0
+bbx/minZ: 0.0

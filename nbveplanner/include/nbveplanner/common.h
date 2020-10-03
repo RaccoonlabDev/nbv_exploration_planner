@@ -19,8 +19,9 @@ using AlignedVector = std::vector<Type, Eigen::aligned_allocator<Type>>;
  * Returns true if all elements of p are smaller or equal than upper_bound and
  * greater or equal than lower_bound
  */
-inline bool allElementsLessThan(const Point &lower_bound,
-                                const Point &upper_bound, const Point &p) {
+template <typename Type>
+inline bool isInsideBounds(const Point &lower_bound, const Point &upper_bound,
+                           const Type &p) {
   if (p.x() >= lower_bound.x() and p.x() <= upper_bound.x() and
       p.y() >= lower_bound.y() and p.y() <= upper_bound.y() and
       p.z() >= lower_bound.z() and p.z() <= upper_bound.z()) {

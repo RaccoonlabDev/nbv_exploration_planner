@@ -150,10 +150,8 @@ void CameraModel::getAabb(Point *aabb_min, Point *aabb_max) const {
 }
 
 bool CameraModel::isPointInView(const Point &point) const {
-  for (int i = 0; i < 3; ++i) {
-    if (bbx_min_[i] > point[i] or bbx_max_[i] < point[i]) {
-      return false;
-    }
+  if (not isInsideBounds(bbx_min_, bbx_max_, point)) {
+    return false;
   }
   for (const auto &bounding_plane : bounding_planes_) {
     if (!bounding_plane.isPointCorrectSide(point)) {

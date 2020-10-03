@@ -11,6 +11,7 @@
 #include <cmath>
 #include <eigen3/Eigen/Dense>
 #include "nbveplanner/common.h"
+#include "nbveplanner/params.h"
 
 namespace nbveplanner {
 
@@ -21,7 +22,7 @@ class VoxbloxManager {
   enum VoxelStatus { kUnknown, kOccupied, kFree };
 
   VoxbloxManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 const std::string &ns);
+                 std::shared_ptr<Params> params, const std::string &ns);
 
   VoxelStatus getVisibility(const Point &view_point, const Point &voxel_to_test,
                             bool stop_at_unknown_voxel) const;
@@ -57,10 +58,6 @@ class VoxbloxManager {
   bool getDistanceAndGradientAtPosition(const Point &pos, double *distance,
                                         Point *grad);
 
-  void setRobotRadius(const double &robot_radius) {
-    robot_radius_ = robot_radius;
-  }
-
   double getNumberOfMappedVoxels() {
     // static const double volume = pow(esdf_layer_->block_size(), 3);
     double nvoxels =
@@ -83,14 +80,15 @@ class VoxbloxManager {
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
 
+  std::shared_ptr<Params> params_;
   voxblox::EsdfServer esdf_server_;
 
   // Cached:
   voxblox::Layer<voxblox::TsdfVoxel> *tsdf_layer_;
   voxblox::Layer<voxblox::EsdfVoxel> *esdf_layer_;
 
-  double robot_radius_;
   double voxel_size_;
+
 };
 
 }  // namespace nbveplanner
