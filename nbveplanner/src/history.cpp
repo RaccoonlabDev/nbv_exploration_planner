@@ -3,14 +3,13 @@
 namespace nbveplanner {
 
 History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 std::shared_ptr<VoxbloxManager> manager,
-                 std::shared_ptr<VoxbloxManager> manager_lowres,
-                 std::shared_ptr<Params> params)
+                 VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+                 Params *params)
     : nh_(nh),
       nh_private_(nh_private),
-      manager_(std::move(manager)),
-      manager_lowres_(std::move(manager_lowres)),
-      params_(std::move(params)) {
+      manager_(CHECK_NOTNULL(manager)),
+      manager_lowres_(CHECK_NOTNULL(manager_lowres)),
+      params_(CHECK_NOTNULL(params)) {
   graph_nodes_pub_ =
       nh_.advertise<visualization_msgs::Marker>("historyGraph/nodes", 100);
   graph_edges_pub_ =
@@ -31,6 +30,7 @@ History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
   home_pos_ = {0.0, 0.0, 0.0};
   kdTree_ = kd_create(3);
   initialized_ = false;
+  stopped_ = false;
 }
 
 History::~History() = default;
@@ -104,17 +104,14 @@ double History::bfs(const Eigen::Vector3d &point) {
   std::unordered_set<std::string> visited;
   visited.insert(convertToString(point));
 
-  std::queue<Eigen::Vector3d> queue;
+  std::queue<Point> queue;
   queue.emplace(point);
-  Eigen::Vector3d new_pos;
-  double voxel_size = manager_lowres_->getResolution();
-  static const std::vector<Eigen::Vector3d> connNeigh{
-      Eigen::Vector3d{voxel_size, 0.0, 0.0},
-      Eigen::Vector3d{-voxel_size, 0.0, 0.0},
-      Eigen::Vector3d{0.0, voxel_size, 0.0},
-      Eigen::Vector3d{0.0, -voxel_size, 0.0},
-      Eigen::Vector3d{0.0, 0.0, voxel_size},
-      Eigen::Vector3d{0.0, 0.0, -voxel_size}};
+  Point new_pos;
+  const double voxel_size = manager_lowres_->getResolution();
+  static const std::vector<Point> connNeigh{
+      Point{voxel_size, 0.0, 0.0}, Point{-voxel_size, 0.0, 0.0},
+      Point{0.0, voxel_size, 0.0}, Point{0.0, -voxel_size, 0.0},
+      Point{0.0, 0.0, voxel_size}, Point{0.0, 0.0, -voxel_size}};
   int frontierVoxels = 0;
   double distance;
   VoxbloxManager::VoxelStatus status;
@@ -122,16 +119,10 @@ double History::bfs(const Eigen::Vector3d &point) {
     new_pos = queue.front();
     queue.pop();
     for (const auto &c : connNeigh) {
-      Eigen::Vector3d candidate{new_pos + c};
-      // TODO: Write function to compare elementwise
+      Point candidate{new_pos + c};
       if (visited.find(convertToString(candidate)) == visited.end() and
           (candidate - point).norm() <= 6.0 and
-          candidate.x() <= params_->bbx_max_.x() and
-          candidate.x() >= params_->bbx_min_.x() and
-          candidate.y() <= params_->bbx_max_.y() and
-          candidate.y() >= params_->bbx_min_.y() and
-          candidate.z() <= params_->bbx_max_.z() and
-          candidate.z() >= params_->bbx_min_.z()) {
+          isInsideBounds(params_->bbx_min_, params_->bbx_max_, candidate)) {
         status = manager_lowres_->getVoxelStatus(candidate);
         if (status == VoxbloxManager::VoxelStatus::kFree and
             manager_lowres_->getDistanceAtPosition(candidate, &distance) and
@@ -183,8 +174,8 @@ void History::historyMaintenance() {
   }
   ROS_INFO("Start History Graph Maintenance");
   stopped_ = false;
-  Eigen::Vector3d prevPos = graph.back().pos;
-  Eigen::Vector3d currPosEigen;
+  Point prevPos = graph.back().pos;
+  Point currPosEigen;
   int iter = 0;
   while (ros::ok()) {
     if (not initialized_) {
@@ -203,16 +194,15 @@ void History::historyMaintenance() {
       ROS_WARN("No node nearby the area");
     }
     Vertex *tmp;
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
       if (not initialized_) {
         stopped_ = true;
         return;
       }
       tmp = (Vertex *)kd_res_item_data(nearest_set);
-      if (graph.size() > 1 and
-          (tmp->potential_gain > zero_frontier_voxels_ or
-           tmp->potential_gain == -1) and
-          not refineVertexPosition(tmp)) {
+      if (graph.size() > 1 and not refineVertexPosition(tmp) and
+          (tmp->potential_gain > params_->zero_frontier_voxels_ or
+           tmp->potential_gain == -1)) {
         recalculatePotential(tmp);
       }
       kd_res_next(nearest_set);
@@ -225,7 +215,7 @@ void History::historyMaintenance() {
 
 void History::recalculatePotential(Vertex *v) {
   v->potential_gain = bfs(v->pos);
-  if (v->potential_gain <= zero_frontier_voxels_) {
+  if (v->potential_gain <= params_->zero_frontier_voxels_) {
     point_msg.header.stamp = ros::Time();
     point_msg.action = visualization_msgs::Marker::ADD;
     point_msg.id = v->id;
@@ -243,17 +233,15 @@ bool History::refineVertexPosition(Vertex *v) {
     Eigen::Vector3d refinedPos = v->pos;
     bool refined = false;
     ros::Time timeout = ros::Time::now() + ros::Duration(1.0);
+    static const Point robot_radius_vec{
+        params_->robot_radius_, params_->robot_radius_, params_->robot_radius_};
+    static const Point lower_bound = params_->bbx_min_ + robot_radius_vec;
+    static const Point upper_bound = params_->bbx_max_ - robot_radius_vec;
     while (manager_->getDistanceAndGradientAtPosition(refinedPos, &distance,
                                                       &grad) and
            grad.norm() > 0.001 and ros::Time::now() < timeout) {
       refinedPos += 0.2 * grad;
-      // TODO: Write function to compare elementwise
-      if (refinedPos.x() < (params_->bbx_min_.x() + params_->robot_radius_) or
-          refinedPos.x() > (params_->bbx_max_.x() - params_->robot_radius_) or
-          refinedPos.y() < (params_->bbx_min_.y() + params_->robot_radius_) or
-          refinedPos.y() > (params_->bbx_max_.y() - params_->robot_radius_) or
-          refinedPos.z() < (params_->bbx_min_.z() + params_->robot_radius_) or
-          refinedPos.z() > (params_->bbx_max_.z() - params_->robot_radius_)) {
+      if (not isInsideBounds(lower_bound, upper_bound, refinedPos)) {
         refinedPos -= 0.2 * grad;
         break;
       } else {
@@ -262,12 +250,12 @@ bool History::refineVertexPosition(Vertex *v) {
     }
     if (refined) {
       bool connected = true;
-      /*for (const auto &n : v->adj) {
+      for (const auto &n : v->adj) {
         if (not manager_->checkMotion(refinedPos, n.first->pos)) {
           connected = false;
           break;
         }
-      }*/
+      }
       if (connected) {
         // Delete the old position in the kd-tree
         kd_delete3(kdTree_, v->pos.x(), v->pos.y(), v->pos.z());
@@ -275,7 +263,7 @@ bool History::refineVertexPosition(Vertex *v) {
                                      refinedPos.z());
         auto *tmp = (Vertex *)kd_res_item_data(nearest);
         kd_res_free(nearest);
-        if ((tmp->pos - v->pos).norm() > 0.5) {
+        if ((tmp->pos - refinedPos).norm() > 0.5) {
           kd_insert3(kdTree_, refinedPos.x(), refinedPos.y(), refinedPos.z(),
                      v);
           v->pos = refinedPos;
@@ -285,7 +273,7 @@ bool History::refineVertexPosition(Vertex *v) {
           point_msg.header.stamp = ros::Time();
           point_msg.action = visualization_msgs::Marker::ADD;
           point_msg.id = v->id;
-          if (v->potential_gain > zero_frontier_voxels_ or
+          if (v->potential_gain > params_->zero_frontier_voxels_ or
               v->potential_gain == -1) {
             point_msg.color = gain_color_;
           } else {
@@ -312,7 +300,6 @@ bool History::refineVertexPosition(Vertex *v) {
   return false;
 }
 
-// TODO: Improve collapse with less restrictions (don't care about edges)
 void History::collapseVertices(Vertex *v1, Vertex *v2) {
   std::unordered_set<unsigned int> visited;
   for (const auto &adj : v1->adj) {
@@ -393,12 +380,6 @@ bool History::getNearestActiveNode(
 
 std::vector<geometry_msgs::Pose> History::getPathToNode(Eigen::Vector3d &goal) {
   std::vector<geometry_msgs::Pose> result;
-  /*AStarNode initial{.v = &graph[graph.size() - 1],
-                    .parent = nullptr,
-                    .g = 0.0,
-                    .h = 0.0,
-                    .f = 0.0};*/
-
   // Get the closest node to the current position
   kdres *nearest =
       kd_nearest3(kdTree_, current_pose_.position.x, current_pose_.position.y,
@@ -481,7 +462,6 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
   auto iter_start = pathNodes.rbegin();
   auto iter_end = pathNodes.rend() - 1;
   while (iter_start != iter_end) {
-    // TODO: Simplify Path
     while (iter_end != (iter_start + 1) and
            not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos)) {
       iter_end -= 1;
@@ -493,12 +473,6 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
 
     trajectory.points.emplace_back(getPointFromEigen((*iter_start)->pos));
     trajectory.points.emplace_back(getPointFromEigen((*iter_end)->pos));
-
-    /*start = {(*(iter - 1))->pos.x(), (*(iter - 1))->pos.y(),
-             (*(iter - 1))->pos.z(), previous_yaw};
-    end = {(*iter)->pos.x(), (*iter)->pos.y(), (*iter)->pos.z(), previous_yaw};
-    trajectory.points.emplace_back(getPointFromEigen((*(iter - 1))->pos));
-    trajectory.points.emplace_back(getPointFromEigen((*iter)->pos));*/
 
     double yaw_direction = end[3] - start[3];
     if (yaw_direction > M_PI) {
@@ -535,17 +509,11 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
 }
 
 void History::addVertex(const geometry_msgs::Point &point) {
-  VLOG(5) << "I get inside addVertex";
   Eigen::Vector3d pos;
-  VLOG(5) << "Home Position Msg: " << point;
   tf::pointMsgToEigen(point, pos);
-  VLOG(5) << "Home Position: " << pos;
   home_pos_ = pos;
-  VLOG(5) << "Error 3";
   graph.emplace_back(Vertex{.pos = pos, .potential_gain = -1, .id = point_id_});
-  VLOG(5) << "Error 4";
   Vertex *v = &(*graph.rbegin());
-  VLOG(5) << "Error 5";
 
   point_msg.header.stamp = ros::Time();
   point_msg.id = point_id_;
@@ -554,11 +522,8 @@ void History::addVertex(const geometry_msgs::Point &point) {
   point_msg.color = gain_color_;
   graph_nodes_pub_.publish(point_msg);
   ++point_id_;
-  VLOG(5) << "Error 6";
   activeNodes.insert(v);
-  VLOG(5) << "Error 7";
   kd_insert3(kdTree_, pos.x(), pos.y(), pos.z(), v);
-  VLOG(5) << "Error 8";
 
   initialized_ = true;
 }

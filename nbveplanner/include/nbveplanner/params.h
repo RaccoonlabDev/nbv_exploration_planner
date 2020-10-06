@@ -5,6 +5,7 @@
 #ifndef NBVEPLANNER_PARAMS_H_
 #define NBVEPLANNER_PARAMS_H_
 
+#include <ros/package.h>
 #include <ros/ros.h>
 #include "nbveplanner/camera_model.h"
 
@@ -36,7 +37,10 @@ struct Params {
         frame_id_("world"),
         sensor_min_range_(0.1),
         sensor_max_range_(5.0),
-        robot_radius_(0.5) {}
+        robot_radius_(0.5),
+        zero_frontier_voxels_(10.0),
+        node_vicinity_range_(5.0),
+        log_(false) {}
 
   void setParametersFromRos(const ros::NodeHandle& nh) {
     nh.param("system/v_max", v_max_, v_max_);
@@ -95,9 +99,32 @@ struct Params {
     VLOG(5) << "sensor_max_range: " << sensor_max_range_;
     nh.param("system/robot_radius", robot_radius_, robot_radius_);
     VLOG(5) << "robot_radius: " << robot_radius_;
+    nh.param("nbvep/graph/zero_frontier_voxels", zero_frontier_voxels_,
+             zero_frontier_voxels_);
+    VLOG(5) << "zero_frontier_voxels: " << zero_frontier_voxels_;
+    nh.param("nbvep/graph/node_vicinity_range", node_vicinity_range_,
+             node_vicinity_range_);
+    VLOG(5) << "node_vicinity_range: " << node_vicinity_range_;
+    nh.param("nbvep/log", log_, log_);
+    VLOG(5) << "nbvep/log: " << log_;
+    if (log_) {
+      time_t rawtime;
+      struct tm* ptm;
+      time(&rawtime);
+      ptm = gmtime(&rawtime);
+      log_path_ =
+          ros::package::getPath("nbveplanner") + "/data/" +
+          std::to_string(ptm->tm_year + 1900) + "_" +
+          std::to_string(ptm->tm_mon + 1) + "_" + std::to_string(ptm->tm_mday) +
+          "_" + std::to_string(ptm->tm_hour) + "_" +
+          std::to_string(ptm->tm_min) + "_" + std::to_string(ptm->tm_sec);
+      system(("mkdir -p " + log_path_).c_str());
+      log_path_ += "/";
+    }
   }
 
   CameraModel camera_model_;
+  double robot_radius_;
   double camera_pitch_;
   double camera_hfov_;
   double camera_vfov_;
@@ -121,13 +148,18 @@ struct Params {
   int cutoff_iterations_;
   double dt_;
 
+  double zero_frontier_voxels_;
+  double node_vicinity_range_;
+
   Point bbx_min_;
   Point bbx_max_;
 
-  double robot_radius_;
   ros::Publisher inspection_path_;
   ros::Publisher exploration_tree_;
   std::string frame_id_;
+
+  bool log_;
+  std::string log_path_;
 };
 }  // namespace nbveplanner
 

@@ -40,12 +40,13 @@ class TreeBase {
   Pose hist_root_;
   Pose exact_root_;
 
-  std::shared_ptr<Params> params_;
+  Params *params_;
+  VoxbloxManager *manager_;
+  VoxbloxManager *manager_lowres_;
 
  public:
-  TreeBase();
-
-  TreeBase(std::shared_ptr<Params> params);
+  TreeBase(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+           Params *params);
 
   ~TreeBase();
 
@@ -54,12 +55,9 @@ class TreeBase {
 
   virtual void setStateFromOdometryMsg(const nav_msgs::Odometry &pose) = 0;
 
-  virtual void iterate() = 0;
-
   virtual void initialize(bool seedHistory) = 0;
 
-  virtual std::vector<geometry_msgs::Pose> getBestEdge(
-      std::string targetFrame) = 0;
+  virtual void iterate() = 0;
 
   virtual void getBestBranch(std::vector<geometry_msgs::Pose> &path,
                              std::vector<geometry_msgs::Pose> &trajectory) = 0;

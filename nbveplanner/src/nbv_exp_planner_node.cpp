@@ -318,8 +318,6 @@ int main(int argc, char **argv) {
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
 
-
-  FLAGS_alsologtostderr = true;
   planner = std::make_unique<nbveplanner::nbvePlanner>(nh, nh_private);
 
   // PUBLISHERS

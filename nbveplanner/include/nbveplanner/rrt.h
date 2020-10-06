@@ -25,11 +25,9 @@ namespace nbveplanner {
 
 class RrtTree : public TreeBase {
  public:
-  RrtTree();
-
-  RrtTree(std::shared_ptr<VoxbloxManager> manager,
-          std::shared_ptr<VoxbloxManager> manager_lowres,
-          std::shared_ptr<Params> params);
+  RrtTree(VoxbloxManager *manager,
+          VoxbloxManager *manager_lowres,
+          Params *params);
 
   ~RrtTree();
 
@@ -43,9 +41,6 @@ class RrtTree : public TreeBase {
   void initialize(bool seedHistory) override;
 
   void iterate() override;
-
-  std::vector<geometry_msgs::Pose> getBestEdge(
-      std::string targetFrame) override;
 
   void getBestBranch(std::vector<geometry_msgs::Pose> &path,
                      std::vector<geometry_msgs::Pose> &trajectory) override;
@@ -61,7 +56,7 @@ class RrtTree : public TreeBase {
 
   void publishNode(Node *node);
 
-  void modifyColorNode(const int id);
+  void modifyColorNode(int id);
 
   double gain2(Pose &state);
 
@@ -79,18 +74,15 @@ class RrtTree : public TreeBase {
 
  protected:
   kdtree *kdTree_;
-  std::shared_ptr<VoxbloxManager> manager_;
-  std::shared_ptr<VoxbloxManager> manager_lowres_;
-  double rootVicinity_;
   std::stack<Pose> history_;
   int g_ID_;
-  int iterationCount_;
-  std::fstream fileTree_;
-  std::fstream filePath_;
-  std::fstream fileResponse_;
-  std::string logFilePath_;
+  double root_vicinity_;
+  int iteration_count_;
   std::mutex myMutex;
   visualization_msgs::MarkerArray tree_msg_;
+  std::fstream file_response_;
+  std::fstream file_tree_;
+  std::fstream file_path_;
 };
 
 }  // namespace nbveplanner

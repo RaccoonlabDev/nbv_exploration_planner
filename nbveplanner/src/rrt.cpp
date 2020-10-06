@@ -7,19 +7,13 @@
 
 namespace nbveplanner {
 
-RrtTree::RrtTree() : TreeBase::TreeBase() {
+RrtTree::RrtTree(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+                 Params *params)
+    : TreeBase(manager, manager_lowres, params) {
+  g_ID_ = 0;
+  root_vicinity_ = 0;
   kdTree_ = kd_create(3);
-  iterationCount_ = 0;
-}
-
-RrtTree::RrtTree(std::shared_ptr<VoxbloxManager> manager,
-                 std::shared_ptr<VoxbloxManager> manager_lowres,
-                 std::shared_ptr<Params> params)
-    : manager_(std::move(manager)),
-      manager_lowres_(std::move(manager_lowres)),
-      TreeBase::TreeBase(std::move(params)) {
-  kdTree_ = kd_create(3);
-  iterationCount_ = 0;
+  iteration_count_ = 0;
 
   // Set camera FOV
   params_->camera_model_.setIntrinsicsFromFoV(
@@ -27,6 +21,12 @@ RrtTree::RrtTree(std::shared_ptr<VoxbloxManager> manager,
       params_->gain_range_);
   // Set Boundaries of Exploration
   params_->camera_model_.setBoundingBox(params_->bbx_min_, params_->bbx_max_);
+
+  if (params_->log_) {
+    file_response_.open((params_->log_path_ + "response.txt").c_str(),
+                        std::ios::out);
+    file_path_.open((params_->log_path_ + "path.txt").c_str(), std::ios::out);
+  }
 }
 
 void RrtTree::visualizeFrustum() {
@@ -86,14 +86,14 @@ void RrtTree::visualizeFrustum() {
 RrtTree::~RrtTree() {
   delete rootNode_;
   kd_free(kdTree_);
-  if (fileResponse_.is_open()) {
-    fileResponse_.close();
+  if (file_response_.is_open()) {
+    file_response_.close();
   }
-  if (fileTree_.is_open()) {
-    fileTree_.close();
+  if (file_tree_.is_open()) {
+    file_tree_.close();
   }
-  if (filePath_.is_open()) {
-    filePath_.close();
+  if (file_path_.is_open()) {
+    file_path_.close();
   }
 }
 
@@ -119,6 +119,18 @@ void RrtTree::setStateFromPoseCovMsg(
   root_[1] = position.y();
   root_[2] = position.z();
   root_[3] = tf::getYaw(quat);
+
+  // Logging Current position of the MAV
+  static double log_throttle_time = ros::Time::now().toSec();
+  if (ros::Time::now().toSec() - log_throttle_time > params_->dt_) {
+    log_throttle_time += params_->dt_;
+    if (params_->log_) {
+      for (size_t i = 0; i < root_.size() - 1; i++) {
+        file_response_ << root_[i] << ";";
+      }
+      file_response_ << root_[root_.size() - 1] << "\n";
+    }
+  }
 }
 
 void RrtTree::setStateFromOdometryMsg(const nav_msgs::Odometry &pose) {
@@ -142,6 +154,18 @@ void RrtTree::setStateFromOdometryMsg(const nav_msgs::Odometry &pose) {
   root_[1] = position.y();
   root_[2] = position.z();
   root_[3] = tf::getYaw(quat);
+
+  // Logging Current position of the MAV
+  static double log_throttle_time = ros::Time::now().toSec();
+  if (ros::Time::now().toSec() - log_throttle_time > params_->dt_) {
+    log_throttle_time += params_->dt_;
+    if (params_->log_) {
+      for (size_t i = 0; i < root_.size() - 1; i++) {
+        file_response_ << root_[i] << ";";
+      }
+      file_response_ << root_[root_.size() - 1] << "\n";
+    }
+  }
 }
 
 void RrtTree::iterate() {
@@ -156,10 +180,10 @@ void RrtTree::iterate() {
   std::mt19937 generator(
       std::chrono::steady_clock::now().time_since_epoch().count());
   std::uniform_real_distribution<double> distribution(0.0, 1.0);
-  double radius_sqrt = SQ(rootVicinity_);
+  double radius_sqrt = SQ(root_vicinity_);
   while (!solutionFound) {
     for (int i = 0; i < 3; i++) {
-      newState[i] = 2.0 * rootVicinity_ * (distribution(generator) - 0.5);
+      newState[i] = 2.0 * root_vicinity_ * (distribution(generator) - 0.5);
     }
     if (SQ(newState[0]) + SQ(newState[1]) + SQ(newState[2]) > radius_sqrt)
       continue;
@@ -196,26 +220,6 @@ void RrtTree::iterate() {
     if (manager_->checkMotion(
             origin, direction + origin +
                         direction.normalized() * params_->dist_overshoot_)) {
-      /*double maxGainFound = -DBL_MAX;
-      double orientationFound;
-      newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
-      std::thread t1(&RrtTree::gain, this, newState, std::ref(maxGainFound),
-                     std::ref(orientationFound));
-      newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
-      std::thread t2(&RrtTree::gain, this, newState, std::ref(maxGainFound),
-                     std::ref(orientationFound), params_->camera_model_);
-      newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
-      std::thread t3(&RrtTree::gain, this, newState, std::ref(maxGainFound),
-                     std::ref(orientationFound), params_->camera_model_);
-      newState[3] = 2.0 * M_PI * (distribution(generator) - 0.5);
-      std::thread t4(&RrtTree::gain, this, newState, std::ref(maxGainFound),
-                     std::ref(orientationFound), params_->camera_model_);
-
-      t1.join();
-      t2.join();
-      t3.join();
-      t4.join();
-      newState[3] = orientationFound;*/
       double gain = gain2(newState);
       // Create new node and insert into tree
       auto *newNode = new Node;
@@ -223,8 +227,8 @@ void RrtTree::iterate() {
       newNode->parent_ = newParent;
       newNode->distance_ = newParent->distance_ + direction.norm();
       newParent->children_.emplace_back(newNode);
-      newNode->gain_ =
-          gain * exp(-params_->degressive_coeff_ * newNode->distance_);
+      newNode->gain_ = gain / (newNode->distance_ / params_->v_max_);
+      // gain * exp(-params_->degressive_coeff_ * newNode->distance_);
       newNode->id_ = g_ID_;
       // std::cout << "Gain: " << newNode->gain_ << std::endl;
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
@@ -238,20 +242,29 @@ void RrtTree::iterate() {
         bestNode_ = newNode;
       }
       counter_++;
+
+      if (params_->log_) {
+        for (size_t i = 0; i < newNode->state_.size(); i++) {
+          file_tree_ << newNode->state_[i] << ";";
+        }
+        file_tree_ << newNode->gain_ << ";";
+        for (size_t i = 0; i < newNode->parent_->state_.size(); i++) {
+          file_tree_ << newNode->parent_->state_[i] << ";";
+        }
+        file_tree_ << newNode->parent_->gain_ << "\n";
+      }
     }
   }
 }
 
 void RrtTree::setRootVicinity(double rootVicinity) {
-  rootVicinity_ = rootVicinity;
+  root_vicinity_ = rootVicinity;
 }
 
 void RrtTree::initialize(bool seedHistory) {
-  // This function is to initialize the tree, including insertion of remainder
-  // of previous best branch.
   g_ID_ = 0;
 
-  // Initialize kd-tree with root node and prepare log file
+  // Initialize kd-tree with root node
   kdTree_ = kd_create(3);
 
   rootNode_ = new Node;
@@ -266,7 +279,17 @@ void RrtTree::initialize(bool seedHistory) {
 
   kd_insert3(kdTree_, rootNode_->state_.x(), rootNode_->state_.y(),
              rootNode_->state_.z(), rootNode_);
-  iterationCount_++;
+  iteration_count_++;
+
+  if (params_->log_) {
+    if (file_tree_.is_open()) {
+      file_tree_.close();
+    }
+    file_tree_.open((params_->log_path_ + "tree_" +
+                     std::to_string(iteration_count_) + ".txt")
+                        .c_str(),
+                    std::ios::out);
+  }
 
   // Publish visualization of total exploration area
   // TODO: Publish once in the main code
@@ -317,21 +340,6 @@ void RrtTree::getBestBranch(std::vector<geometry_msgs::Pose> &path,
   pathNodes.emplace_back(current);
   sampleBranch(pathNodes, path, trajectory);
   exact_root_ = current->state_;
-}
-
-std::vector<geometry_msgs::Pose> RrtTree::getBestEdge(std::string targetFrame) {
-  // This function returns the first edge of the best branch
-  std::vector<geometry_msgs::Pose> ret;
-  Node *current = bestNode_;
-  if (current->parent_ != nullptr) {
-    while (current->parent_ != rootNode_ && current->parent_ != nullptr) {
-      current = current->parent_;
-    }
-    ret = samplePath(current->parent_->state_, current->state_, targetFrame);
-    history_.push(current->parent_->state_);
-    exact_root_ = current->state_;
-  }
-  return ret;
 }
 
 double RrtTree::gain2(Pose &state) {
@@ -634,7 +642,6 @@ void RrtTree::modifyColorNode(const int id) {
 std::vector<geometry_msgs::Pose> RrtTree::samplePath(
     Pose start, Pose end, const std::string &targetFrame) {
   std::vector<geometry_msgs::Pose> ret;
-  static tf::TransformListener listener;
   Eigen::Vector3d distance(end[0] - start[0], end[1] - start[1],
                            end[2] - start[2]);
   double yaw_direction = end[3] - start[3];
@@ -657,12 +664,18 @@ std::vector<geometry_msgs::Pose> RrtTree::samplePath(
     if (yaw < -M_PI) yaw += 2.0 * M_PI;
     tf::Quaternion quat;
     quat.setEuler(0.0, 0.0, yaw);
-    // origin = transform * origin;
-    // quat = transform * quat;
     tf::Pose poseTF(quat, origin);
     geometry_msgs::Pose pose;
     tf::poseTFToMsg(poseTF, pose);
     ret.push_back(pose);
+
+    // Logging the best path selected
+    if (params_->log_) {
+      for (size_t i = 0; i < 3; ++i) {
+        file_path_ << origin[i] << ";";
+      }
+      file_path_ << yaw << "\n";
+    }
   }
   return ret;
 }
@@ -705,6 +718,14 @@ void RrtTree::sampleBranch(const std::vector<Node *> &pathNodes,
       geometry_msgs::Pose pose;
       tf::poseTFToMsg(poseTF, pose);
       result.emplace_back(pose);
+
+      // Logging the best path selected
+      if (params_->log_) {
+        for (size_t i = 0; i < 3; ++i) {
+          file_path_ << origin[i] << ";";
+        }
+        file_path_ << yaw << "\n";
+      }
     }
   }
 }

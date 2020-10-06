@@ -12,7 +12,7 @@
     <arg name="sensor_max_range" default="3.0" />
     <arg name="sensor_min_range" default="0.05" />
     <arg name="speed_rotate" default="0.5"/>
-    <arg name="shift_initial_x" default="0.0"/>
+    <arg name="shift_initial_x" default="0.5"/>
     <arg name="shift_initial_y" default="0.0"/>
     <arg name="shift_initial_z" default="-0.25"/>
     <arg name="namespace_voxblox" default="lowres/"/>

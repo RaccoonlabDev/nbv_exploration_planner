@@ -43,17 +43,18 @@ class nbvePlanner {
   ros::Subscriber pointcloud_sub_;
 
   // Map Manager
-  std::shared_ptr<VoxbloxManager> manager_;
-  std::shared_ptr<VoxbloxManager> manager_lowres_;
+  std::unique_ptr<VoxbloxManager> manager_;
+  std::unique_ptr<VoxbloxManager> manager_lowres_;
   std::unique_ptr<RrtTree> tree_;
 
   bool exploration_complete_;
   bool ready_;
   std::string ns_map_;
+  std::fstream file_exploration_;
 
  public:
   std::unique_ptr<History> hist_;
-  std::shared_ptr<Params> params_;
+  std::unique_ptr<Params> params_;
   geometry_msgs::Pose local_position_;
 
   nbvePlanner(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);

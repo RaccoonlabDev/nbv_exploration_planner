@@ -4,7 +4,7 @@ namespace nbveplanner {
 
 nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
                          const ros::NodeHandle &nh_private)
-    : nh_(nh), nh_private_(nh_private), params_(new Params()) {
+    : nh_(nh), nh_private_(nh_private), params_(std::make_unique<Params>()) {
   params_->setParametersFromRos(nh_private_);
   params_->inspection_path_ =
       nh_.advertise<visualization_msgs::Marker>("inspectionPath", 1);
@@ -16,20 +16,31 @@ nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
 
   nh_private_.param<std::string>("namespace_lowres_map", ns_map_, "lowres/");
 
-  manager_ = std::make_shared<VoxbloxManager>(nh, nh_private, params_, "");
+  manager_ =
+      std::make_unique<VoxbloxManager>(nh, nh_private, params_.get(), "");
   manager_lowres_ =
-      std::make_shared<VoxbloxManager>(nh, nh_private, params_, ns_map_);
-  hist_ = std::make_unique<History>(nh, nh_private, manager_, manager_lowres_,
-                                    params_);
-  tree_ = std::make_unique<RrtTree>(manager_, manager_lowres_, params_);
-
+      std::make_unique<VoxbloxManager>(nh, nh_private, params_.get(), ns_map_);
+  hist_ = std::make_unique<History>(nh, nh_private, manager_.get(),
+                                    manager_lowres_.get(), params_.get());
+  tree_ = std::make_unique<RrtTree>(manager_.get(), manager_lowres_.get(),
+                                    params_.get());
+  if (params_->log_) {
+    file_exploration_.open((params_->log_path_ + "exploration.txt").c_str(),
+                           std::ios::out);
+    file_exploration_ << ros::Time::now().toSec() << ";0;0\n";
+    file_exploration_.close();
+  }
   // Not yet ready. Needs a position message first.
   ready_ = false;
   exploration_complete_ = false;
   ROS_INFO("Planner All Set");
 }
 
-nbvePlanner::~nbvePlanner() = default;
+nbvePlanner::~nbvePlanner() {
+  if (file_exploration_.is_open()) {
+    file_exploration_.close();
+  }
+}
 
 void nbvePlanner::poseCovCallback(
     const geometry_msgs::PoseWithCovarianceStamped &pose) {
@@ -169,6 +180,14 @@ bool nbvePlanner::plannerCallback(
 
   double cTime = (ros::Time::now() - computationTime).toSec();
   ROS_INFO("Path computation lasted %2.3fs", cTime);
+  if (params_->log_) {
+    file_exploration_.open((params_->log_path_ + "exploration.txt").c_str(),
+                           std::ios::app);
+    file_exploration_ << ros::Time::now().toSec() << ";" << cTime << ";"
+                      << manager_->getNumberMappedVoxels() << "\n";
+    file_exploration_.close();
+
+  }
   return true;
 }
 

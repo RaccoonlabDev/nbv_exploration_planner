@@ -22,7 +22,7 @@ class VoxbloxManager {
   enum VoxelStatus { kUnknown, kOccupied, kFree };
 
   VoxbloxManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 std::shared_ptr<Params> params, const std::string &ns);
+                 Params *params, const std::string &ns);
 
   VoxelStatus getVisibility(const Point &view_point, const Point &voxel_to_test,
                             bool stop_at_unknown_voxel) const;
@@ -58,29 +58,21 @@ class VoxbloxManager {
   bool getDistanceAndGradientAtPosition(const Point &pos, double *distance,
                                         Point *grad);
 
-  double getNumberOfMappedVoxels() {
-    // static const double volume = pow(esdf_layer_->block_size(), 3);
-    double nvoxels =
-        esdf_layer_->getNumberOfAllocatedBlocks() * esdf_layer_->block_size();
-    std::cout << "Number of mapped space: " << nvoxels << std::endl;
-    return nvoxels;
-  }
-
   void clear();
 
-  /*
-  bool isLineInCollision(const Point &start,
-                         const Point &end) const;
-
-  bool isLineInCollision(const Pose &start4d,
-                         const Pose &end4d) const;
-                         */
+  double getNumberMappedVoxels() {
+    static const double voxels_per_side = tsdf_layer_->voxels_per_side();
+    static const double volume_per_block = voxels_per_side * voxels_per_side *
+                                           voxels_per_side * voxel_size_ *
+                                           voxel_size_ * voxel_size_;
+    return tsdf_layer_->getNumberOfAllocatedBlocks() * volume_per_block;
+  }
 
  private:
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
 
-  std::shared_ptr<Params> params_;
+  Params *params_;
   voxblox::EsdfServer esdf_server_;
 
   // Cached:
@@ -88,7 +80,6 @@ class VoxbloxManager {
   voxblox::Layer<voxblox::EsdfVoxel> *esdf_layer_;
 
   double voxel_size_;
-
 };
 
 }  // namespace nbveplanner

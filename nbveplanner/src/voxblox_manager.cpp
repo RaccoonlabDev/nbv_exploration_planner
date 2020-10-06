@@ -8,12 +8,12 @@ namespace nbveplanner {
 
 VoxbloxManager::VoxbloxManager(const ros::NodeHandle &nh,
                                const ros::NodeHandle &nh_private,
-                               std::shared_ptr<Params> params,
+                               Params *params,
                                const std::string &ns)
     : nh_(nh),
       nh_private_(nh_private),
       esdf_server_(nh, nh_private, ns),
-      params_(std::move(params)) {
+      params_(CHECK_NOTNULL(params)) {
   tsdf_layer_ = esdf_server_.getTsdfMapPtr()->getTsdfLayerPtr();
   esdf_layer_ = esdf_server_.getEsdfMapPtr()->getEsdfLayerPtr();
   CHECK_NOTNULL(tsdf_layer_);
@@ -161,82 +161,4 @@ void VoxbloxManager::clear() {
   esdf_layer_ = esdf_server_.getEsdfMapPtr()->getEsdfLayerPtr();
 }
 
-/*
-bool VoxbloxManager::isLineInCollision(const Point &start,
-                                       const Point &end) const {
-  CHECK_NOTNULL(esdf_layer_);
-  CHECK_GT(voxel_size_, 0.0);
-
-  Point direction = (end - start);
-  double distance = direction.norm();
-  direction.normalize();
-
-  // Don't check anything smaller than 1 voxel.
-  if (distance < voxel_size_) {
-    return false;
-  }
-
-  // Start at the start, keep going by distance increments...
-  Point current_position = start;
-  double distance_so_far = 0.0;
-
-  while (distance_so_far <= distance) {
-    voxblox::EsdfVoxel *esdf_voxel = esdf_layer_->getVoxelPtrByCoordinates(
-        current_position.cast<voxblox::FloatingPoint>());
-    if (esdf_voxel == nullptr) {
-      return true;
-    }
-    if (esdf_voxel->distance < robot_radius_) {
-      return true;
-    }
-
-    double step_size =
-        std::max(voxel_size_, esdf_voxel->distance - robot_radius_);
-
-    current_position += direction * step_size;
-    distance_so_far += step_size;
-  }
-  return false;
-}
-
-bool VoxbloxManager::isLineInCollision(const Pose &start4d,
-                                       const Pose &end4d) const {
-  CHECK_NOTNULL(esdf_layer_);
-  CHECK_GT(voxel_size_, 0.0);
-
-  Point start = {start4d.x(), start4d.y(), start4d.z()};
-  Point end = {end4d.x(), end4d.y(), end4d.z()};
-
-  Point direction = (end - start);
-  double distance = direction.norm();
-  direction.normalize();
-
-  // Don't check anything smaller than 1 voxel.
-  if (distance < voxel_size_) {
-    return false;
-  }
-
-  // Start at the start, keep going by distance increments...
-  Point current_position = start;
-  double distance_so_far = 0.0;
-
-  while (distance_so_far <= distance) {
-    voxblox::EsdfVoxel *esdf_voxel = esdf_layer_->getVoxelPtrByCoordinates(
-        current_position.cast<voxblox::FloatingPoint>());
-    if (esdf_voxel == nullptr) {
-      return true;
-    }
-    if (esdf_voxel->distance < robot_radius_) {
-      return true;
-    }
-
-    double step_size =
-        std::max(voxel_size_, esdf_voxel->distance - robot_radius_);
-
-    current_position += direction * step_size;
-    distance_so_far += step_size;
-  }
-  return false;
-}
- */
 }  // namespace nbveplanner
