@@ -23,7 +23,7 @@
     <arg name="color_mode" default="color"/>
 
     <group ns="$(arg mav_name)">
-        <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen" args="-alsologtostderr --v=-1">
+        <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen" args="-alsologtostderr -vmodule=rrt=5">
             <param name="wp_z" type="double" value="$(arg waypoint_z)" />
             <param name="speed_rotate" type="double" value="$(arg speed_rotate)" />
             <param name="shift_initial_x" type="double" value="$(arg shift_initial_x)"/>

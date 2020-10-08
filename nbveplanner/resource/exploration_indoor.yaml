@@ -1,5 +1,5 @@
 system/v_max: 0.8
-system/dyaw_max: 0.8
+system/dyaw_max: 0.7
 system/camera/pitch: 0.0
 system/camera/hfov: 86.0
 system/camera/vfov: 57.0
@@ -32,4 +32,4 @@ bbx/minY: -1.0
 bbx/maxZ: 2.5
 bbx/minZ: 1.0
 
-nbvep/log: false
+nbvep/log: true

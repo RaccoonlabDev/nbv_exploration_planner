@@ -6,6 +6,8 @@ Node::Node() {
   id_ = -1;
   parent_ = nullptr;
   distance_ = DBL_MAX;
+  num_unmapped_ = 0.0;
+  time_to_reach_ = 0.0;
   gain_ = 0.0;
 }
 

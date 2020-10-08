@@ -24,6 +24,8 @@ class Node {
   Pose state_;
   Node *parent_;
   std::vector<Node *> children_;
+  double num_unmapped_;
+  double time_to_reach_;
   double gain_;
   double distance_;
   int id_;

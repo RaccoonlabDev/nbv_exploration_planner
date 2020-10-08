@@ -220,17 +220,17 @@ void RrtTree::iterate() {
     if (manager_->checkMotion(
             origin, direction + origin +
                         direction.normalized() * params_->dist_overshoot_)) {
-      double gain = gain2(newState);
       // Create new node and insert into tree
+      double num_unmapped = gain2(newState);
       auto *newNode = new Node;
       newNode->state_ = newState;
       newNode->parent_ = newParent;
       newNode->distance_ = newParent->distance_ + direction.norm();
-      newParent->children_.emplace_back(newNode);
-      newNode->gain_ = gain / (newNode->distance_ / params_->v_max_);
-      // gain * exp(-params_->degressive_coeff_ * newNode->distance_);
+      newNode->num_unmapped_ = num_unmapped;
+      newNode->time_to_reach_ = newNode->distance_ / params_->v_max_;
+      newNode->gain_ = newNode->num_unmapped_ / newNode->time_to_reach_;
       newNode->id_ = g_ID_;
-      // std::cout << "Gain: " << newNode->gain_ << std::endl;
+      newParent->children_.emplace_back(newNode);
       kd_insert3(kdTree_, newState.x(), newState.y(), newState.z(), newNode);
 
       // Display new node
@@ -247,11 +247,14 @@ void RrtTree::iterate() {
         for (size_t i = 0; i < newNode->state_.size(); i++) {
           file_tree_ << newNode->state_[i] << ";";
         }
-        file_tree_ << newNode->gain_ << ";";
-        for (size_t i = 0; i < newNode->parent_->state_.size(); i++) {
+        file_tree_ << newNode->num_unmapped_ << ";" << newNode->time_to_reach_
+                   << ";" << newNode->gain_ << ";";
+        for (size_t i = 0; i < newNode->parent_->state_.size() - 1; i++) {
           file_tree_ << newNode->parent_->state_[i] << ";";
         }
-        file_tree_ << newNode->parent_->gain_ << "\n";
+        file_tree_
+            << newNode->parent_->state_[newNode->parent_->state_.size() - 1]
+            << "\n";
       }
     }
   }
@@ -690,6 +693,7 @@ void RrtTree::sampleBranch(const std::vector<Node *> &pathNodes,
   for (auto iter = pathNodes.rbegin(); (iter + 1) != pathNodes.rend(); ++iter) {
     Pose start = (*iter)->state_;
     Pose end = (*(iter + 1))->state_;
+
     history_.push(start);
 
     Eigen::Vector3d distance(end[0] - start[0], end[1] - start[1],
@@ -698,7 +702,7 @@ void RrtTree::sampleBranch(const std::vector<Node *> &pathNodes,
     if (yaw_direction > M_PI) {
       yaw_direction -= 2.0 * M_PI;
     }
-    if (yaw_direction < -M_PI) {
+    else if (yaw_direction < -M_PI) {
       yaw_direction += 2.0 * M_PI;
     }
     double disc =
@@ -706,17 +710,18 @@ void RrtTree::sampleBranch(const std::vector<Node *> &pathNodes,
                  params_->dt_ * params_->dyaw_max_ / abs(yaw_direction));
     assert(disc > 0.0);
     for (double it = 0.0; it <= 1.0; it += disc) {
-      tf::Vector3 origin((1.0 - it) * start[0] + it * end[0],
-                         (1.0 - it) * start[1] + it * end[1],
-                         (1.0 - it) * start[2] + it * end[2]);
+      Point origin((1.0 - it) * start[0] + it * end[0],
+                   (1.0 - it) * start[1] + it * end[1],
+                   (1.0 - it) * start[2] + it * end[2]);
       double yaw = start[3] + yaw_direction * it;
       if (yaw > M_PI) yaw -= 2.0 * M_PI;
-      if (yaw < -M_PI) yaw += 2.0 * M_PI;
-      tf::Quaternion quat;
-      quat.setEuler(0.0, 0.0, yaw);
-      tf::Pose poseTF(quat, origin);
+      else if (yaw < -M_PI) yaw += 2.0 * M_PI;
+      Eigen::Affine3d aff;
+      aff.translation() = origin;
+      Eigen::Quaterniond quat(Eigen::AngleAxisd(yaw, Point::UnitZ()));
+      aff.linear() = quat.toRotationMatrix();
       geometry_msgs::Pose pose;
-      tf::poseTFToMsg(poseTF, pose);
+      tf::poseEigenToMsg(aff, pose);
       result.emplace_back(pose);
 
       // Logging the best path selected
