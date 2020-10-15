@@ -10,7 +10,7 @@ nbvep/gain/free: 0.0
 nbvep/gain/occupied: 0.0
 nbvep/gain/unmapped: 1.0
 nbvep/gain/range: 3.0
-nbvep/gain/zero: 0.0
+nbvep/gain/zero: 1.0
 nbvep/gain/degressive_coeff: 0.0
 
 nbvep/tree/extension_range: 1.0

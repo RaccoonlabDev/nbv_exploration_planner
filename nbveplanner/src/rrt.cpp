@@ -442,7 +442,7 @@ double RrtTree::gain2(Pose &state) {
     vertical_gain[i + 180] = gain;
   }
   double max_gain = 0.0;
-  int max_gain_yaw;
+  int max_gain_yaw = 0;
   double current_gain;
   static const int half_hfov = std::floor(params_->camera_hfov_ / 2.0);
   for (int i = -180; i < 180; i += 5) {
