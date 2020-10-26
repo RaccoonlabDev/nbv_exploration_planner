@@ -2,7 +2,6 @@
 
 #include <minkindr_conversions/kindr_tf.h>
 #include <cstdlib>
-#include <utility>
 #include "nbveplanner/tree.h"
 
 namespace nbveplanner {
@@ -227,7 +226,15 @@ void RrtTree::iterate() {
       newNode->parent_ = newParent;
       newNode->distance_ = newParent->distance_ + direction.norm();
       newNode->num_unmapped_ = num_unmapped;
-      newNode->time_to_reach_ = newNode->distance_ / params_->v_max_;
+      double yaw_direction = newState[3] - newParent->state_[3];
+      if (yaw_direction > M_PI) {
+        yaw_direction -= 2.0 * M_PI;
+      }
+      if (yaw_direction < -M_PI) {
+        yaw_direction += 2.0 * M_PI;
+      }
+      newNode->time_to_reach_ = std::max(yaw_direction / params_->dyaw_max_,
+                                         newNode->distance_ / params_->v_max_);
       newNode->gain_ = newNode->num_unmapped_ / newNode->time_to_reach_;
       newNode->id_ = g_ID_;
       newParent->children_.emplace_back(newNode);
@@ -350,6 +357,8 @@ double RrtTree::gain2(Pose &state) {
   static const double voxel_size_inv = 1.0 / voxel_size;
   static const int voxels_per_side = manager_lowres_->getVoxelsPerSide();
   static const double voxels_per_side_inv = 1.0 / voxels_per_side;
+  static const double cubic_voxel_size = CUBE(voxel_size);
+
   const Point position_mav(state[0], state[1], state[2]);
   voxblox::HierarchicalIndexSet checked_voxels_set;
   Eigen::Quaterniond orientation;
@@ -470,7 +479,7 @@ double RrtTree::gain2(Pose &state) {
     }
   }
   state[3] = max_gain_yaw * M_PI / 180.0;
-  return max_gain * pow(voxel_size, 3.0);
+  return max_gain * cubic_voxel_size;
 }
 
 void RrtTree::gain(Pose state, double &maxGainFound, double &orientationFound) {
@@ -701,8 +710,7 @@ void RrtTree::sampleBranch(const std::vector<Node *> &pathNodes,
     double yaw_direction = end[3] - start[3];
     if (yaw_direction > M_PI) {
       yaw_direction -= 2.0 * M_PI;
-    }
-    else if (yaw_direction < -M_PI) {
+    } else if (yaw_direction < -M_PI) {
       yaw_direction += 2.0 * M_PI;
     }
     double disc =
@@ -714,8 +722,10 @@ void RrtTree::sampleBranch(const std::vector<Node *> &pathNodes,
                    (1.0 - it) * start[1] + it * end[1],
                    (1.0 - it) * start[2] + it * end[2]);
       double yaw = start[3] + yaw_direction * it;
-      if (yaw > M_PI) yaw -= 2.0 * M_PI;
-      else if (yaw < -M_PI) yaw += 2.0 * M_PI;
+      if (yaw > M_PI)
+        yaw -= 2.0 * M_PI;
+      else if (yaw < -M_PI)
+        yaw += 2.0 * M_PI;
       Eigen::Affine3d aff;
       aff.translation() = origin;
       Eigen::Quaterniond quat(Eigen::AngleAxisd(yaw, Point::UnitZ()));

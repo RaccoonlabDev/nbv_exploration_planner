@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="ISO-8859-15"?>
+<launch>
+    <node pkg="rosbag" type="record" name="rosbag_record_drone" args="/iris/historyGraph/edges /iris/historyGraph/nodes /iris/historyGraph/trajectory /tf /iris/inspectionPath /iris/explorationTree /iris/nbvePlanner/mesh /goal /mavros/local_position/pose -o /home/op/Desktop/exploration" respawn="true" />
+
+</launch>

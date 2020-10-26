@@ -56,7 +56,7 @@ void send_path(std::vector<geometry_msgs::Pose> &path) {
     position_control_msg = aux_msg;
     loop_rate.sleep();
   }
-  ros::Duration(2.0).sleep();
+  ros::Duration(1.0).sleep();
 }
 
 bool stop_planner() {
@@ -96,7 +96,7 @@ void start_planner() {
       if (not trajectory.empty()) {
         send_path(trajectory);
         trajectory.clear();
-        // planner->setDroneExploration(true);
+        planner->setDroneExploration(true);
       }
       if (not path.empty()) {
         send_path(path);

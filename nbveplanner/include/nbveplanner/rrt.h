@@ -20,6 +20,7 @@
 #include <thread>
 
 #define SQ(x) ((x) * (x))
+#define CUBE(x) ((x) * (x) * (x))
 
 namespace nbveplanner {
 

@@ -1,4 +1,5 @@
 #include "nbveplanner/nbvep.h"
+#include <minkindr_conversions/kindr_tf.h>
 
 namespace nbveplanner {
 
@@ -6,10 +7,11 @@ nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
                          const ros::NodeHandle &nh_private)
     : nh_(nh), nh_private_(nh_private), params_(std::make_unique<Params>()) {
   params_->setParametersFromRos(nh_private_);
+  setCameraFrame();
   params_->inspection_path_ =
       nh_.advertise<visualization_msgs::Marker>("inspectionPath", 1);
   params_->exploration_tree_ =
-      nh_.advertise<visualization_msgs::MarkerArray>("explorationTree", 100);
+      nh_.advertise<visualization_msgs::MarkerArray>("explorationTree", 1);
   posCovClient_ =
       nh_.subscribe("pose_cov", 10, &nbvePlanner::poseCovCallback, this);
   odomClient_ = nh_.subscribe("odometry", 10, &nbvePlanner::odomCallback, this);
@@ -34,6 +36,23 @@ nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
   ready_ = false;
   exploration_complete_ = false;
   ROS_INFO("Planner All Set");
+}
+
+void nbvePlanner::setCameraFrame() const {
+  static tf::TransformListener listener;
+  tf::StampedTransform stamped_transform;
+
+  try {
+    listener.waitForTransform(params_->camera_frame_, "base_link", ros::Time::now(),
+                              ros::Duration(3.0));
+    listener.lookupTransform(params_->camera_frame_, "base_link", ros::Time(0),
+                             stamped_transform);
+  } catch (tf::TransformException &ex) {
+    ROS_WARN("%s", ex.what());
+  }
+  Transformation T_C_B;
+  tf::transformTFToKindr(stamped_transform, &T_C_B);
+  params_->camera_model_.setExtrinsics(T_C_B);
 }
 
 nbvePlanner::~nbvePlanner() {
@@ -186,7 +205,6 @@ bool nbvePlanner::plannerCallback(
     file_exploration_ << ros::Time::now().toSec() << ";" << cTime << ";"
                       << manager_->getNumberMappedVoxels() << "\n";
     file_exploration_.close();
-
   }
   return true;
 }

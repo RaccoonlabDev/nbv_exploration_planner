@@ -124,9 +124,9 @@ double History::bfs(const Eigen::Vector3d &point) {
           (candidate - point).norm() <= 6.0 and
           isInsideBounds(params_->bbx_min_, params_->bbx_max_, candidate)) {
         status = manager_lowres_->getVoxelStatus(candidate);
-        if (status == VoxbloxManager::VoxelStatus::kFree and
+        if (status == VoxbloxManager::VoxelStatus::kFree /*and
             manager_lowres_->getDistanceAtPosition(candidate, &distance) and
-            distance > params_->robot_radius_) {
+            distance > params_->robot_radius_*/) {
           visited.insert(convertToString(candidate));
           queue.emplace(candidate);
         } else if (status == VoxbloxManager::VoxelStatus::kUnknown) {

@@ -10,7 +10,7 @@ if __name__ == '__main__':
         if path[-1] != '/':
            path += '/'
 
-        '''exploration_file = np.loadtxt(path+'exploration.txt', delimiter=';')
+        exploration_file = np.loadtxt(path+'exploration.txt', delimiter=';')
         plt.plot((exploration_file[:,0]-exploration_file[0,0])/60.0, exploration_file[:, 2])
         plt.xlabel('Time [min]')
         plt.ylabel('Explored Volume [m3]')
@@ -20,10 +20,6 @@ if __name__ == '__main__':
         plt.xlabel('Iteration')
         plt.ylabel('Computation time [s]')
         plt.title('Computation time per iteration')
-        plt.show()'''
-
-        tree_file = np.loadtxt(path+'tree_57.txt', delimiter=';')
-        plt.plot(range(tree_file.shape[0]), tree_file[:, 4])
         plt.show()
 else:
         print('Specify the data folder path to read from')

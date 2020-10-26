@@ -35,6 +35,7 @@ struct Params {
         zero_gain_(0.0),
         dist_overshoot_(0.25),
         frame_id_("world"),
+        camera_frame_("camera"),
         sensor_min_range_(0.1),
         sensor_max_range_(5.0),
         robot_radius_(0.5),
@@ -93,6 +94,8 @@ struct Params {
     VLOG(5) << "overshoot: " << dist_overshoot_;
     nh.param("tf_frame", frame_id_, frame_id_);
     VLOG(5) << "frame_id: " << frame_id_;
+    nh.param("camera_frame", camera_frame_, camera_frame_);
+    VLOG(5) << "camera_frame: " << camera_frame_;
     nh.param("sensor_min_range", sensor_min_range_, sensor_min_range_);
     VLOG(5) << "sensor_min_range: " << sensor_min_range_;
     nh.param("sensor_max_range", sensor_max_range_, sensor_max_range_);
@@ -107,6 +110,7 @@ struct Params {
     VLOG(5) << "node_vicinity_range: " << node_vicinity_range_;
     nh.param("nbvep/log", log_, log_);
     VLOG(5) << "nbvep/log: " << log_;
+
     if (log_) {
       time_t rawtime;
       struct tm* ptm;
@@ -157,6 +161,7 @@ struct Params {
   ros::Publisher inspection_path_;
   ros::Publisher exploration_tree_;
   std::string frame_id_;
+  std::string camera_frame_;
 
   bool log_;
   std::string log_path_;

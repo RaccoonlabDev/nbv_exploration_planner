@@ -17,9 +17,9 @@
 #include <ctime>
 #include <eigen3/Eigen/Dense>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #define SQ(x) ((x) * (x))
 #define SQRT2 0.70711
@@ -60,6 +60,8 @@ class nbvePlanner {
   nbvePlanner(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);
 
   ~nbvePlanner();
+
+  void setCameraFrame() const;
 
   void poseCovCallback(const geometry_msgs::PoseWithCovarianceStamped &pose);
 
