@@ -1,13 +1,14 @@
 <?xml version="1.0" ?>
 <sdf version='1.6'>
   <world name='default'>
-    <!--plugin name="ros_interface_plugin" filename="librotors_gazebo_ros_interface_plugin.so"/-->
-    <physics type='ode'>
+    <physics name='default_physics' default='0' type='ode'>
+      <gravity>0 0 -9.8066</gravity>
       <ode>
         <solver>
           <type>quick</type>
-          <iters>1000</iters>
+          <iters>10</iters>
           <sor>1.3</sor>
+          <use_dynamic_moi_rescaling>0</use_dynamic_moi_rescaling>
         </solver>
         <constraints>
           <cfm>0</cfm>
@@ -16,11 +17,12 @@
           <contact_surface_layer>0.001</contact_surface_layer>
         </constraints>
       </ode>
-      <max_step_size>0.01</max_step_size>
+      <max_step_size>0.004</max_step_size>
       <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>100</real_time_update_rate>
-      <gravity>0 0 -9.8</gravity>
+      <real_time_update_rate>250</real_time_update_rate>
+      <magnetic_field>6.0e-6 2.3e-5 -4.2e-5</magnetic_field>
     </physics>
+
 
     <light name='sun' type='directional'>
       <cast_shadows>1</cast_shadows>
@@ -1499,10 +1501,6 @@
       </link>
     </model>
     <state world_name='default'>
-      <sim_time>6844 228000000</sim_time>
-      <real_time>6858 150303292</real_time>
-      <wall_time>1540899424 599397415</wall_time>
-      <iterations>6844228</iterations>
       <model name='Maze_House'>
         <pose frame=''>-0.083649 -5.67478 0 0 -0 0</pose>
         <scale>1 1 1</scale>

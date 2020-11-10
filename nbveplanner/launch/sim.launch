@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<launch>
+    <param name="/use_sim_time" value="true" />
+    <arg name="rviz" default="true"/>
+    <arg name="use_slam" default="false"/>
+    <arg name="run_gazebo" default="true"/>
+
+    <param name="robot_description" textfile="$(find drone_sim)/include/fixed_joint.urdf" />
+    <!-- fixed_joint-->
+    <node pkg="robot_state_publisher" name="drone_fixed_joints_pub" type="robot_state_publisher" output="screen" respawn="true">
+        <param name="publish_frequency" value="50.0"/>
+    </node>
+
+    <!-- MAVROS VIO-->
+    <group if="$(arg run_gazebo)">
+        <!-- Posix SITL environment launch script -->
+        <!-- launches PX4 SITL, Gazebo environment, and spawns vehicle -->
+        <!-- vehicle pose -->
+
+        <!-- fpi -->
+        <arg name="x" default="-3.0"/>
+        <arg name="y" default="6.0"/>
+        <arg name="z" default="0.2"/>
+
+        <!-- large maze -->
+        <!--arg name="x" default="15.0"/>
+        <arg name="y" default="13.0"/>
+        <arg name="z" default="0.1"/-->
+
+        <!-- Tunnel -->
+        <!--arg name="x" default="-7.0"/>
+        <arg name="y" default="29.0"/>
+        <arg name="z" default="2.6"/-->
+
+        <arg name="R" default="0"/>
+        <arg name="P" default="0"/>
+        <arg name="Y" default="0"/>
+        <!-- vehicle model and world -->
+        <arg name="est" default="ekf2"/>
+        <arg name="vehicle" default="inno_drone"/>
+        <!--arg name="world" default="$(find nbveplanner)/worlds/tunnel.world"/-->
+        <arg name="world" default="$(find drone_sim)/worlds/track1.world"/>
+        <arg name="sdf" default="$(find drone_sim)/models/$(arg vehicle)/$(arg vehicle).sdf"/>
+        <env name="PX4_SIM_MODEL" value="iris_opt_flow" />
+        <env name="PX4_ESTIMATOR" value="$(arg est)" />
+
+        <!-- gazebo configs -->
+        <arg name="gui" default="false"/>
+        <arg name="debug" default="false"/>
+        <arg name="verbose" default="false"/>
+        <arg name="paused" default="false"/>
+        <arg name="respawn_gazebo" default="false"/>
+        <!-- PX4 configs -->
+        <arg name="interactive" default="true"/>
+        <!-- PX4 SITL -->
+        <arg unless="$(arg interactive)" name="px4_command_arg1" value="-d"/>
+        <arg     if="$(arg interactive)" name="px4_command_arg1" value=""/>
+        <node name="sitl" pkg="px4" type="px4" output="screen"
+              args="$(find px4)/ROMFS/px4fmu_common -s etc/init.d-posix/rcS $(arg px4_command_arg1)" required="true"/>
+
+        <!-- Gazebo sim -->
+
+        <include file="$(find gazebo_ros)/launch/empty_world.launch">
+            <arg name="gui" value="$(arg gui)"/>
+            <arg name="world_name" value="$(arg world)"/>
+            <arg name="debug" value="$(arg debug)"/>
+            <arg name="verbose" value="$(arg verbose)"/>
+            <arg name="paused" value="$(arg paused)"/>
+            <arg name="respawn_gazebo" value="$(arg respawn_gazebo)"/>
+        </include>
+
+        <!-- gazebo model -->
+
+        <node name="$(anon vehicle_spawn)" pkg="gazebo_ros" type="spawn_model" output="screen" args="-sdf -file $(arg sdf) -model $(arg vehicle) -x $(arg x) -y $(arg y) -z $(arg z) -R $(arg R) -P $(arg P) -Y $(arg Y)"/>
+
+    </group>
+
+    <!-- MAVROS VIO-->
+    <group if="$(arg use_slam)">
+        <include file="$(find mavros_link)/launch/px4_slam_sim.launch">
+            <!-- GCS link is provided by SITL -->
+            <arg name="gcs_url" value=""/>
+            <arg name="fcu_url" value="udp://:14540@localhost:14557"/>
+            <arg name="respawn_mavros" value="false"/>
+        </include>
+
+        <!-- Run cartograpther-->
+        <include file="$(find drone_bringup)/launch/cartograpther.launch"/>
+    </group>
+
+    <!-- MAVROS GPS-->
+    <group unless="$(arg use_slam)">
+        <include file="$(find mavros_link)/launch/px4_sim.launch">
+            <!-- GCS link is provided by SITL -->
+            <arg name="gcs_url" value=""/>
+            <arg name="fcu_url" value="udp://:14540@localhost:14557"/>
+            <arg name="respawn_mavros" value="false"/>
+        </include>
+    </group>
+
+
+    <!-- RUN REG -->
+    <include file="$(find drone_bringup)/launch/reg.launch"/>
+    <!-- Exploratioon -->
+    <!--include file="$(find nbveplanner)/launch/voxblox_exploration_indoor.launch"/-->
+    <!-- RVIZ -->
+    <node if="$(arg rviz)" pkg="rviz" type="rviz" name="$(anon rviz)" respawn="true" output="screen"
+          args="-d $(find drone_rviz)/rviz/task_1.rviz"/>
+
+</launch>

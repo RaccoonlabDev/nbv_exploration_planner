@@ -1,29 +1,33 @@
-#ifndef NBVEP_H_
-#define NBVEP_H_
+#ifndef NBVEPLANNER_NBVEP_H_
+#define NBVEPLANNER_NBVEP_H_
 
-#include <eigen3/Eigen/Dense>
-#include <fstream>
+#include "nbveplanner/history.h"
+#include "nbveplanner/params.h"
+#include "nbveplanner/rrt.h"
+#include "nbveplanner/tree.h"
+#include "nbveplanner/voxblox_manager.h"
+
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
-#include <nbveplanner/history.h>
-#include <nbveplanner/rrt.h>
-#include <nbveplanner/tree.hpp>
-#include <nbveplanner/voxblox_manager.h>
-#include <std_srvs/Empty.h>
-
 #include <ros/ros.h>
-#include <string>
-#include <vector>
-
+#include <std_srvs/Empty.h>
 #include <chrono>
 #include <ctime>
+#include <eigen3/Eigen/Dense>
+#include <fstream>
+#include <memory>
+#include <string>
+#include <vector>
 
 #define SQ(x) ((x) * (x))
 #define SQRT2 0.70711
 
-template <typename stateVec> class nbvePlanner {
-protected:
+namespace nbveplanner {
+
+class nbvePlanner {
+ protected:
   enum SamplingStatus { initial, reseeded, full };
 
   ros::NodeHandle nh_;
@@ -39,46 +43,46 @@ protected:
   ros::Subscriber pointcloud_sub_;
 
   // Map Manager
-  VoxbloxManager *manager_;
+  std::unique_ptr<VoxbloxManager> manager_;
+  std::unique_ptr<VoxbloxManager> manager_lowres_;
+  std::unique_ptr<RrtTree> tree_;
 
   bool exploration_complete_;
   bool ready_;
+  std::string ns_map_;
+  std::fstream file_exploration_;
 
-public:
-  TreeBase<stateVec> *tree_;
-  History *hist_;
-  std::ofstream dataFile_;
-  std::string path_;
-  ros::Time initialTime;
-  Params params_;
+ public:
+  std::unique_ptr<History> hist_;
+  std::unique_ptr<Params> params_;
   geometry_msgs::Pose local_position_;
-
 
   nbvePlanner(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private);
 
   ~nbvePlanner();
 
-  bool setParams();
+  void setCameraFrame() const;
 
   void poseCovCallback(const geometry_msgs::PoseWithCovarianceStamped &pose);
 
   void odomCallback(const nav_msgs::Odometry &pose);
 
-  bool isExplorationComplete();
+  bool isExplorationComplete() const;
 
-  bool isReady();
+  bool isReady() const;
 
   bool plannerCallback(std::vector<geometry_msgs::Pose> &path,
                        std::vector<geometry_msgs::Pose> &trajectory);
 
-  bool goHome(std::vector<geometry_msgs::Pose> &path);
+  bool goHome(std::vector<geometry_msgs::Pose> &path) const;
 
   bool reset();
 
-  void setDroneExploration(bool drone_exploring);
+  void setDroneExploration(bool drone_exploring) const;
 
-  void initializeHistoryGraph(geometry_msgs::Point initial_position);
-
+  void initializeHistoryGraph(geometry_msgs::Point initial_position) const;
 };
 
-#endif // NBVEP_H_
+}  // namespace nbveplanner
+
+#endif  // NBVEPLANNER_NBVEP_H_

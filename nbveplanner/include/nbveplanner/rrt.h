@@ -1,46 +1,47 @@
-#ifndef RRTTREE_H_
-#define RRTTREE_H_
+#ifndef NBVEPLANNER_RRTTREE_H_
+#define NBVEPLANNER_RRTTREE_H_
 
-#include <chrono>
-#include <eigen3/Eigen/Dense>
+#include "nbveplanner/tree.h"
+
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <kdtree/kdtree.h>
-#include <mutex>
 #include <nav_msgs/Odometry.h>
-#include <nbveplanner/tree.h>
-#include <random>
 #include <ros/package.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <sstream>
 #include <tf/tf.h>
-#include <tf/transform_listener.h>
-#include <thread>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <chrono>
+#include <eigen3/Eigen/Dense>
+#include <mutex>
+#include <random>
+#include <sstream>
+#include <thread>
 
 #define SQ(x) ((x) * (x))
-#define SQRT2 0.70711
+#define CUBE(x) ((x) * (x) * (x))
 
-class RrtTree : public TreeBase<Eigen::Vector4d> {
-public:
-  RrtTree();
+namespace nbveplanner {
 
-  RrtTree(VoxbloxManager *manager);
+class RrtTree : public TreeBase {
+ public:
+  RrtTree(VoxbloxManager *manager,
+          VoxbloxManager *manager_lowres,
+          Params *params);
 
   ~RrtTree();
+
+  void visualizeFrustum();
 
   void setStateFromPoseCovMsg(
       const geometry_msgs::PoseWithCovarianceStamped &pose) override;
 
   void setStateFromOdometryMsg(const nav_msgs::Odometry &pose) override;
 
-  void initialize(const bool seedHistory) override;
+  void initialize(bool seedHistory) override;
 
   void iterate() override;
-
-  std::vector<geometry_msgs::Pose>
-  getBestEdge(std::string targetFrame) override;
 
   void getBestBranch(std::vector<geometry_msgs::Pose> &path,
                      std::vector<geometry_msgs::Pose> &trajectory) override;
@@ -49,39 +50,41 @@ public:
 
   void reset() override;
 
-  std::vector<geometry_msgs::Pose>
-  getPathBackToPrevious(std::string targetFrame) override;
+  std::vector<geometry_msgs::Pose> getPathBackToPrevious(
+      std::string targetFrame) override;
 
   void setRootVicinity(double rootVicinity) override;
 
-  void publishNode(Node<StateVec> *node);
+  void publishNode(Node *node);
 
-  void gain(StateVec state, double &maxGainFound, double &orientationFound);
+  void modifyColorNode(int id);
 
-  void compareGain(StateVec &state, double gain, double &maxGainFound,
+  double gain2(Pose &state);
+
+  void gain(Pose state, double &maxGainFound, double &orientationFound);
+
+  void compareGain(Pose &state, double gain, double &maxGainFound,
                    double &orientationFound);
 
-  std::vector<geometry_msgs::Pose> samplePath(StateVec start, StateVec end,
+  std::vector<geometry_msgs::Pose> samplePath(Pose start, Pose end,
                                               const std::string &targetFrame);
 
-  void sampleBranch(const std::vector<Node<StateVec> *> &pathNodes,
+  void sampleBranch(const std::vector<Node *> &pathNodes,
                     std::vector<geometry_msgs::Pose> &result,
                     std::vector<geometry_msgs::Pose> &trajectory);
 
-  // virtual int getUnknownCells();
-
-protected:
+ protected:
   kdtree *kdTree_;
-  double rootVicinity_;
-  std::stack<StateVec> history_;
+  std::stack<Pose> history_;
   int g_ID_;
-  int iterationCount_;
-  std::fstream fileTree_;
-  std::fstream filePath_;
-  std::fstream fileResponse_;
-  std::string logFilePath_;
+  double root_vicinity_;
+  int iteration_count_;
   std::mutex myMutex;
   visualization_msgs::MarkerArray tree_msg_;
+  std::fstream file_response_;
+  std::fstream file_tree_;
+  std::fstream file_path_;
 };
 
+}  // namespace nbveplanner
 #endif

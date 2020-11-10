@@ -1,68 +1,93 @@
 <?xml version="1.0" encoding="ISO-8859-15"?>
 <launch>
     <arg name="mav_name" default="iris"/>
-    <arg name="waypoint_z" default="1.5" />
-    <arg name="rviz" default="true"/>
-    <arg name="rosbag" default="false"/>
+    <arg name="waypoint_z" default="1.0" />
+    <arg name="rviz" default="false"/>
+    <arg name="rosbag" default="true"/>
     <arg name="param_file" default="$(find nbveplanner)/resource/exploration_indoor.yaml" />
     <arg name="tf_frame" default="map" />
+    <arg name="camera_frame" default="camera"/>
     <arg name="pcl_topic" default= "/r200/depth/points" />
     <arg name="pose_cov" default="/mavros/local_position/pose_cov"/>
     <arg name="odom" default="/mavros/local_position/odom" />
-    <arg name="sensor_max_range" default="3.0" />
-    <arg name="sensor_min_range" default="0.05" />
+    <arg name="sensor_max_range" default="5.0" />
+    <arg name="sensor_min_range" default="0.1" />
     <arg name="speed_rotate" default="0.5"/>
-    <arg name="shift_initial_x" default="0.0"/>
+    <arg name="shift_initial_x" default="0.5"/>
     <arg name="shift_initial_y" default="0.0"/>
     <arg name="shift_initial_z" default="-0.25"/>
-    <arg name="path_plot" default=""/>
-    <arg name="method" default="fast" />
-    <arg name="voxel_size" default="0.15" />
+    <arg name="namespace_voxblox" default="lowres/"/>
+    <arg name="method" default="fast"/>
+    <arg name="voxel_size" default="0.1" />
+    <arg name="lowres_voxel_size" default="0.2"/>
     <arg name="position_controller" default="/goal"/>
     <arg name="color_mode" default="color"/>
 
     <group ns="$(arg mav_name)">
-        <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen">
+        <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen" args="-alsologtostderr --v=-1">
             <param name="wp_z" type="double" value="$(arg waypoint_z)" />
             <param name="speed_rotate" type="double" value="$(arg speed_rotate)" />
             <param name="shift_initial_x" type="double" value="$(arg shift_initial_x)"/>
             <param name="shift_initial_y" type="double" value="$(arg shift_initial_y)"/>
             <param name="shift_initial_z" type="double" value="$(arg shift_initial_z)"/>
             <param name="tf_frame" type="string" value="$(arg tf_frame)" />
+            <param name="camera_frame" type="string" value="$(arg camera_frame)" />
             <param name="sensor_max_range" type="double" value="$(arg sensor_max_range)" />
             <param name="sensor_min_range" type="double" value="$(arg sensor_min_range)" />
-            <param name="path_plot" type="string" value="$(arg path_plot)" />
-            <param name="map_publish_frequency" type="double" value="1.0" />
+            <param name="namespace_lowres_map" type="string" value="$(arg namespace_voxblox)"/>
 
             <remap from="position_control" to="$(arg position_controller)"/>
             <remap from="pose_cov" to="$(arg pose_cov)"/>
             <remap from="odometry" to="$(arg odom)"/>
             <remap from="nbveplanner" to="/$(arg mav_name)/nbveplanner"/>
 
+            <rosparam command="load" file="$(arg param_file)" />
+
             <!-- VOXBLOX PARAMETERS -->
             <remap from="pointcloud" to="$(arg pcl_topic)"/>
-            
+
             <param name="tsdf_voxel_size" value="$(arg voxel_size)" />
             <param name="tsdf_voxels_per_side" value="16" />
-            <param name="min_time_between_msgs_sec" value="0.2" />
+            <param name="min_time_between_msgs_sec" value="0.1" />
             <param name="min_ray_length_m" value="$(arg sensor_min_range)" />
             <param name="max_ray_length_m" value="$(arg sensor_max_range)" />
             <param name="voxel_carving_enabled" value="true" />
-	        <param name="color_mode" value="$(arg color_mode)" />
+            <param name="color_mode" value="$(arg color_mode)" />
             <param name="use_const_weight" value="false"/>
-            
+
             <param name="publish_tsdf_map" value="false" />
             <param name="publish_esdf_map" value="false" />
             <param name="update_mesh_every_n_sec" value="0.15" />
 
             <param name="method" value="$(arg method)" />
             <param name="allow_clear" value="true" />
-            
+
             <param name="use_tf_transforms" value="true" />
             <param name="world_frame" value="$(arg tf_frame)" />
             <param name="verbose" value="false" />
 
-            <rosparam command="load" file="$(arg param_file)" />
+            <!-- VOXBLOX LOW RESOLUTION PARAMETERS -->
+            <remap from="$(arg namespace_voxblox)pointcloud" to="$(arg pcl_topic)"/>
+
+            <param name="$(arg namespace_voxblox)tsdf_voxel_size" value="$(arg lowres_voxel_size)" />
+            <param name="$(arg namespace_voxblox)tsdf_voxels_per_side" value="16" />
+            <param name="$(arg namespace_voxblox)min_time_between_msgs_sec" value="0.1" />
+            <param name="$(arg namespace_voxblox)min_ray_length_m" value="$(arg sensor_min_range)" />
+            <param name="$(arg namespace_voxblox)max_ray_length_m" value="$(arg sensor_max_range)" />
+            <param name="$(arg namespace_voxblox)voxel_carving_enabled" value="true" />
+            <param name="$(arg namespace_voxblox)color_mode" value="$(arg color_mode)" />
+            <param name="$(arg namespace_voxblox)use_const_weight" value="false"/>
+
+            <param name="$(arg namespace_voxblox)publish_tsdf_map" value="false" />
+            <param name="$(arg namespace_voxblox)publish_esdf_map" value="false" />
+            <param name="$(arg namespace_voxblox)update_mesh_every_n_sec" value="0.0" />
+
+            <param name="$(arg namespace_voxblox)method" value="merged" />
+            <param name="$(arg namespace_voxblox)allow_clear" value="true" />
+
+            <param name="$(arg namespace_voxblox)use_tf_transforms" value="true" />
+            <param name="$(arg namespace_voxblox)world_frame" value="$(arg tf_frame)" />
+            <param name="$(arg namespace_voxblox)verbose" value="false" />
         </node>
     </group>
 
@@ -70,7 +95,7 @@
     <node if="$(arg rviz)" pkg="rviz" type="rviz" name="$(anon rviz)" respawn="false" output="screen" 
     	args="-d $(find nbveplanner)/rviz/voxblox_exploration_indoor.rviz"/>
 
-    <node if="$(arg rosbag)" pkg="rosbag" type="record" name="rosbag_record_drone" args="/iris/historyGraph/edges /iris/historyGraph/nodes /iris/historyGraph/trajectory /tf /iris/inspectionPath /iris/nbvePlanner/mesh /down_camera/camera_info /down_camera/image_raw /r200/depth/camera_info /r200/depth/image_raw /mavros/setpoint_position/local /mavros/local_position/pose -o /home/devitt/Desktop/exploration" respawn="true" />
-
+    <node if="$(arg rosbag)" pkg="rosbag" type="record" name="rosbag_record_drone" args="/iris/historyGraph/edges /iris/historyGraph/nodes /iris/historyGraph/trajectory /tf /iris/inspectionPath /iris/explorationTree
+     /iris/nbvePlanner/mesh /goal /mavros/local_position/pose -o /home/op/Desktop/ICRA/exploration" respawn="true" />
 
 </launch>
