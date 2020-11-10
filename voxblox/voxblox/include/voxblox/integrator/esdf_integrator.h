@@ -100,6 +100,12 @@ class EsdfIntegrator {
   void updateFromTsdfLayer(bool clear_updated_flag);
 
   /**
+   * Incrementally update from the TSDF layer the frontier blocks
+   */
+  void updateFrontiers(const Block<TsdfVoxel>::Ptr& tsdf_block,
+                       size_t lin_index);
+
+  /**
    * Short-cut for pushing neighbors (i.e., incremental update) by default.
    * Not necessary in batch.
    */

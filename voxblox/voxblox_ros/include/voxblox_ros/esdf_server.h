@@ -45,6 +45,9 @@ class EsdfServer : public TsdfServer {
   /// considering only the newly updated parts of the TSDF map (checked with
   /// the ESDF updated bit in Update::Status).
   void updateEsdf();
+
+  void publishUpdatedFrontiers();
+
   /// Update the ESDF all at once; clear the existing map.
   void updateEsdfBatch(bool full_euclidean = false);
 
@@ -83,6 +86,7 @@ class EsdfServer : public TsdfServer {
   ros::Publisher esdf_pointcloud_pub_;
   ros::Publisher esdf_slice_pub_;
   ros::Publisher traversable_pub_;
+  ros::Publisher frontiers_pub_;
 
   /// Publish the complete map for other nodes to consume.
   ros::Publisher esdf_map_pub_;

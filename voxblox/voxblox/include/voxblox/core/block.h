@@ -4,17 +4,19 @@
 #include <algorithm>
 #include <atomic>
 #include <bitset>
+#include <boost/dynamic_bitset.hpp>
 #include <memory>
 #include <vector>
 
 #include "voxblox/Block.pb.h"
+#include "voxblox/core/block_hash.h"
 #include "voxblox/core/common.h"
 
 namespace voxblox {
 
 namespace Update {
 /// Status of which derived things still need to be updated.
-enum Status { kMap, kMesh, kEsdf, kCount };
+enum Status { kMap, kMesh, kEsdf, kFrontier, kCount };
 }  // namespace Update
 
 /** An n x n x n container holding VoxelType. It is aware of its 3D position and
@@ -38,6 +40,8 @@ class Block {
     block_size_ = voxels_per_side_ * voxel_size_;
     block_size_inv_ = 1.0 / block_size_;
     voxels_.reset(new VoxelType[num_voxels_]);
+    frontiers_.resize(num_voxels_);
+    id_ = AnyIndexHash()(this->block_index());
   }
 
   explicit Block(const BlockProto& proto);
@@ -187,6 +191,12 @@ class Block {
 
   size_t getMemorySize() const;
 
+  const std::size_t& id() const { return id_; }
+
+  const boost::dynamic_bitset<>& frontiers() const { return frontiers_; }
+
+  boost::dynamic_bitset<>& frontiers() { return frontiers_; }
+
  protected:
   std::unique_ptr<VoxelType[]> voxels_;
 
@@ -212,6 +222,12 @@ class Block {
 
   /// Is set to true when data is updated.
   std::bitset<Update::kCount> updated_;
+
+  // Is set to true when the corresponding voxel is a frontier
+  boost::dynamic_bitset<> frontiers_;
+
+  // Unique id
+  std::size_t id_;
 };
 
 }  // namespace voxblox

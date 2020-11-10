@@ -1,9 +1,74 @@
 #ifndef VOXBLOX_ROS_CONVERSIONS_INL_H_
 #define VOXBLOX_ROS_CONVERSIONS_INL_H_
 
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 #include <vector>
 
 namespace voxblox {
+
+template <typename VoxelType>
+void serializeFrontiersAsMsg(Layer<VoxelType>* layer, bool only_updated,
+                             visualization_msgs::MarkerArray* msg,
+                             bool clear_updated_flag) {
+  CHECK_NOTNULL(msg);
+  BlockIndexList block_list;
+  if (only_updated) {
+    layer->getAllUpdatedBlocks(Update::kFrontier, &block_list);
+  } else {
+    layer->getAllAllocatedBlocks(&block_list);
+  }
+  visualization_msgs::Marker marker_msg;
+  marker_msg.header.frame_id = "map";
+  marker_msg.ns = "frontier";
+  marker_msg.type = visualization_msgs::Marker::CUBE_LIST;
+  marker_msg.pose.orientation.x = 0.0;
+  marker_msg.pose.orientation.y = 0.0;
+  marker_msg.pose.orientation.z = 0.0;
+  marker_msg.pose.orientation.w = 1.0;
+  marker_msg.color.r = 1.0;
+  marker_msg.color.g = 0.0;
+  marker_msg.color.b = 0.0;
+  marker_msg.color.a = 0.5;
+  marker_msg.scale.x = layer->voxel_size();
+  marker_msg.scale.y = layer->voxel_size();
+  marker_msg.scale.z = layer->voxel_size();
+
+  Block<TsdfVoxel>::ConstPtr block;
+  for (const BlockIndex& index : block_list) {
+    marker_msg.points.clear();
+    if (layer->hasBlock(index)) {
+      block = layer->getBlockPtrByIndex(index);
+      marker_msg.id = block->id();
+      marker_msg.header.stamp = ros::Time::now();
+      // If true, we consider it as a frontier block
+      if (block->frontiers().count() > 256) {
+        marker_msg.points.reserve(block->frontiers().count());
+        Point voxel_origin;
+        geometry_msgs::Point point_msg;
+        for (size_t lin_idx = 0; lin_idx < block->num_voxels(); ++lin_idx) {
+          if (block->frontiers()[lin_idx]) {
+            voxel_origin = block->computeCoordinatesFromLinearIndex(lin_idx);
+            point_msg.x = voxel_origin.x();
+            point_msg.y = voxel_origin.y();
+            point_msg.z = voxel_origin.z();
+            marker_msg.points.emplace_back(point_msg);
+          }
+        }
+        marker_msg.action = visualization_msgs::Marker::ADD;
+      }
+      // Else, simply delete the marker
+      else {
+        marker_msg.action = visualization_msgs::Marker::DELETE;
+      }
+      msg->markers.emplace_back(marker_msg);
+
+      if (clear_updated_flag) {
+        layer->getBlockByIndex(index).updated().reset(Update::kFrontier);
+      }
+    }
+  }
+}
 
 template <typename VoxelType>
 void serializeLayerAsMsg(const Layer<VoxelType>& layer, const bool only_updated,

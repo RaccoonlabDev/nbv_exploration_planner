@@ -121,6 +121,46 @@ void EsdfIntegrator::updateFromTsdfLayer(bool clear_updated_flag) {
   }
 }
 
+void EsdfIntegrator::updateFrontiers(const Block<TsdfVoxel>::Ptr& tsdf_block,
+                                     size_t lin_index) {
+  static const AlignedVector<Point> adjacent{
+      Point{voxel_size_, 0., 0.}, Point{-voxel_size_, 0., 0.},
+      Point{0., voxel_size_, 0.}, Point{0., -voxel_size_, 0.},
+      Point{0., 0., voxel_size_}, Point{0., 0., -voxel_size_}};
+
+  TsdfVoxel current_voxel = tsdf_block->getVoxelByLinearIndex(lin_index);
+  Point voxel_coord = tsdf_block->computeCoordinatesFromLinearIndex(lin_index);
+  // If the voxel is free look up if its a frontier, by checking the adjacent
+  if (current_voxel.weight > 1e-1 and current_voxel.distance > 0) {
+    bool is_frontier = false;
+    Point adj_coord;
+    for (const auto& adj : adjacent) {
+      adj_coord = voxel_coord + adj;
+      Block<TsdfVoxel>::ConstPtr adj_block_ptr =
+          tsdf_layer_->getBlockPtrByCoordinates(adj_coord);
+      if (adj_block_ptr) {
+        TsdfVoxel adj_voxel = adj_block_ptr->getVoxelByCoordinates(adj_coord);
+        if (adj_voxel.weight <= 1e-1) {
+          is_frontier = true;
+          break;
+        }
+      } else {
+        is_frontier = true;
+        break;
+      }
+    }
+    // Check if there is any change with respect to the previous update
+    if (is_frontier != tsdf_block->frontiers()[lin_index]) {
+      // Update the new value in the block
+      tsdf_block->frontiers().set(lin_index, is_frontier);
+      if (tsdf_block->frontiers().count() > 256) {
+        // Mark it as updated
+        tsdf_block->updated().set(Update::kFrontier, true);
+      }
+    }
+  }
+}
+
 void EsdfIntegrator::updateFromTsdfBlocks(const BlockIndexList& tsdf_blocks,
                                           bool incremental) {
   CHECK_EQ(tsdf_layer_->voxels_per_side(), esdf_layer_->voxels_per_side());
@@ -134,7 +174,7 @@ void EsdfIntegrator::updateFromTsdfBlocks(const BlockIndexList& tsdf_blocks,
   VLOG(3) << "[ESDF update]: Propagating " << tsdf_blocks.size()
           << " updated blocks from the TSDF.";
   for (const BlockIndex& block_index : tsdf_blocks) {
-    Block<TsdfVoxel>::ConstPtr tsdf_block =
+    Block<TsdfVoxel>::Ptr tsdf_block =
         tsdf_layer_->getBlockPtrByIndex(block_index);
     if (!tsdf_block) {
       continue;
@@ -162,6 +202,9 @@ void EsdfIntegrator::updateFromTsdfBlocks(const BlockIndexList& tsdf_blocks,
         }
         continue;
       }
+
+      // Check if this voxel is frontier
+      updateFrontiers(tsdf_block, lin_index);
 
       EsdfVoxel& esdf_voxel = esdf_block->getVoxelByLinearIndex(lin_index);
       VoxelIndex voxel_index =

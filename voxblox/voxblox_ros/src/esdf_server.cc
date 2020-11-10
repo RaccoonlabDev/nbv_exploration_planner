@@ -6,7 +6,7 @@
 namespace voxblox {
 
 EsdfServer::EsdfServer(const ros::NodeHandle& nh,
-                       const ros::NodeHandle& nh_private, const std::string &ns)
+                       const ros::NodeHandle& nh_private, const std::string& ns)
     : EsdfServer(nh, nh_private, getEsdfMapConfigFromRosParam(nh_private, ns),
                  getEsdfIntegratorConfigFromRosParam(nh_private, ns),
                  getTsdfMapConfigFromRosParam(nh_private, ns),
@@ -41,35 +41,39 @@ EsdfServer::EsdfServer(const ros::NodeHandle& nh,
 void EsdfServer::setupRos() {
   // Set up publisher.
   esdf_pointcloud_pub_ =
-      nh_private_.advertise<pcl::PointCloud<pcl::PointXYZI> >(ns_+"esdf_pointcloud",
-                                                              1, true);
+      nh_private_.advertise<pcl::PointCloud<pcl::PointXYZI> >(
+          ns_ + "esdf_pointcloud", 1, true);
   esdf_slice_pub_ = nh_private_.advertise<pcl::PointCloud<pcl::PointXYZI> >(
-      ns_+"esdf_slice", 1, true);
+      ns_ + "esdf_slice", 1, true);
   traversable_pub_ = nh_private_.advertise<pcl::PointCloud<pcl::PointXYZI> >(
-      ns_+"traversable", 1, true);
+      ns_ + "traversable", 1, true);
 
-  esdf_map_pub_ =
-      nh_private_.advertise<voxblox_msgs::Layer>(ns_+"esdf_map_out", 1, false);
+  esdf_map_pub_ = nh_private_.advertise<voxblox_msgs::Layer>(
+      ns_ + "esdf_map_out", 1, false);
+
+  frontiers_pub_ = nh_private_.advertise<visualization_msgs::MarkerArray>(
+      ns_ + "frontiers", 1);
 
   // Set up subscriber.
-  esdf_map_sub_ = nh_private_.subscribe(ns_+"esdf_map_in", 1,
+  esdf_map_sub_ = nh_private_.subscribe(ns_ + "esdf_map_in", 1,
                                         &EsdfServer::esdfMapCallback, this);
 
   // Whether to clear each new pose as it comes in, and then set a sphere
   // around it to occupied.
-  nh_private_.param(ns_+"clear_sphere_for_planning", clear_sphere_for_planning_,
-                    clear_sphere_for_planning_);
-  nh_private_.param(ns_+"publish_esdf_map", publish_esdf_map_, publish_esdf_map_);
+  nh_private_.param(ns_ + "clear_sphere_for_planning",
+                    clear_sphere_for_planning_, clear_sphere_for_planning_);
+  nh_private_.param(ns_ + "publish_esdf_map", publish_esdf_map_,
+                    publish_esdf_map_);
 
   // Special output for traversable voxels. Publishes all voxels with distance
   // at least traversibility radius.
-  nh_private_.param(ns_+"publish_traversable", publish_traversable_,
+  nh_private_.param(ns_ + "publish_traversable", publish_traversable_,
                     publish_traversable_);
-  nh_private_.param(ns_+"traversability_radius", traversability_radius_,
+  nh_private_.param(ns_ + "traversability_radius", traversability_radius_,
                     traversability_radius_);
 
   double update_esdf_every_n_sec = 1.0;
-  nh_private_.param(ns_+"update_esdf_every_n_sec", update_esdf_every_n_sec,
+  nh_private_.param(ns_ + "update_esdf_every_n_sec", update_esdf_every_n_sec,
                     update_esdf_every_n_sec);
 
   if (update_esdf_every_n_sec > 0.0) {
@@ -194,7 +198,16 @@ void EsdfServer::updateEsdf() {
   if (tsdf_map_->getTsdfLayer().getNumberOfAllocatedBlocks() > 0) {
     const bool clear_updated_flag_esdf = true;
     esdf_integrator_->updateFromTsdfLayer(clear_updated_flag_esdf);
+    publishUpdatedFrontiers();
   }
+}
+
+void EsdfServer::publishUpdatedFrontiers() {
+  visualization_msgs::MarkerArray msg;
+  const bool clear_updated_flag_esdf = true;
+  serializeFrontiersAsMsg<TsdfVoxel>(tsdf_map_->getTsdfLayerPtr(), true, &msg,
+                                     clear_updated_flag_esdf);
+  frontiers_pub_.publish(msg);
 }
 
 void EsdfServer::updateEsdfBatch(bool full_euclidean) {
@@ -225,14 +238,14 @@ void EsdfServer::newPoseCallback(const Transformation& T_G_C) {
     esdf_integrator_->addNewRobotPosition(T_G_C.getPosition());
   }
 
-  timing::Timer block_remove_timer(ns_+"remove_distant_blocks");
+  timing::Timer block_remove_timer(ns_ + "remove_distant_blocks");
   esdf_map_->getEsdfLayerPtr()->removeDistantBlocks(
       T_G_C.getPosition(), max_block_distance_from_body_);
   block_remove_timer.Stop();
 }
 
 void EsdfServer::esdfMapCallback(const voxblox_msgs::Layer& layer_msg) {
-  timing::Timer receive_map_timer(ns_+"map/receive_esdf");
+  timing::Timer receive_map_timer(ns_ + "map/receive_esdf");
 
   bool success =
       deserializeMsgToLayer<EsdfVoxel>(layer_msg, esdf_map_->getEsdfLayerPtr());
