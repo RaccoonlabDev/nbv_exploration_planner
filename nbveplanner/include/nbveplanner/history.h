@@ -44,6 +44,10 @@ struct AStarNode {
   bool operator<(const AStarNode &node) const { return f < node.f; }
 };
 
+/**
+ * Class to create a History Graph with vertices and nodes, added incrementally,
+ * and maintained during the exploration process
+ */
 class History {
  public:
   History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
@@ -56,16 +60,46 @@ class History {
 
   void odomCallback(const nav_msgs::Odometry &pose);
 
+  /**
+   * Keeps the History Graph updated while the exploration process is running
+   */
   void historyMaintenance();
 
+  /**
+   * Collapses v2 and its edges into v1. The edges are merged if they form a
+   * collision-free path from v1 to the goal node.
+   * @param v1 Pointer to a vertex in the history graph
+   * @param v2 Pointer to a vertex in the history graph
+   */
   void collapseVertices(Vertex *v1, Vertex *v2);
 
+  /**
+   * Pushes away from obstacles the position of v using the direction of
+   * the ESDF gradient
+   * @param v Pointer to a vertex in the history graph
+   * @return True if v position was refined, False otherwise
+   */
   bool refineVertexPosition(Vertex *v);
 
+  /**
+   * Recalculates the potential gain of the vertex v
+   * @param v Pointer to a vertex in the history graph
+   */
   void recalculatePotential(Vertex *v);
 
+  /**
+   * Adds the point to the history graph without connecting it to the graph.
+   * Mainly used for creating the root node.
+   * @param point Position in Cartesian space
+   */
   void addVertex(const geometry_msgs::Point &point);
 
+  /**
+   *
+   * @param point Geometry message of the position in Cartesian space
+   * @param state Vector of the position in Cartesian space
+   * @param potential_gain Potential gain to associate with the new node
+   */
   void addVertexAndConnect(const geometry_msgs::Point &point,
                            const Point &state, double potential_gain);
 
@@ -73,19 +107,43 @@ class History {
     drone_exploring_ = drone_exploring;
   }
 
+  /**
+   * Deletes all the visualization markers published
+   */
   void clear();
 
+  /**
+   * Restarts the history graph and its maintenance. This function erases
+   * the previous graph built.
+   */
   void reset();
 
   bool getDroneExploring() const { return drone_exploring_; }
 
   void publishVertex();
 
+  /**
+   * Computes a vector of active nodes sorted in increasing order of distance
+   * from the current position, and stores it in res
+   * @param res The resulting sorted vector is stored here
+   * @return True if an active node exists, False otherwise
+   */
   bool getNearestActiveNode(
       std::vector<std::pair<Vertex *, unsigned int>> &res);
 
+  /**
+   * Computes the path, if exists, from the current position to the goal node,
+   * using A* algorithm.
+   * @param goal Desired goal node in 3D space
+   * @return The vector of the waypoints to reach the goal
+   */
   std::vector<geometry_msgs::Pose> getPathToNode(Point &goal);
 
+  /**
+   * Discretizes the path in small steps to be sent to the controller later
+   * @param pathNodes The vector of vertex waypoints
+   * @param result The resulting sampled path in ROS message format
+   */
   void sampleBranch(const std::vector<Vertex *> &pathNodes,
                     std::vector<geometry_msgs::Pose> &result);
 
