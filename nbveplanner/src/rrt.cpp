@@ -14,13 +14,6 @@ RrtTree::RrtTree(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
   kdTree_ = kd_create(3);
   iteration_count_ = 0;
 
-  // Set camera FOV
-  params_->camera_model_.setIntrinsicsFromFoV(
-      params_->camera_hfov_, params_->camera_vfov_, params_->sensor_min_range_,
-      params_->gain_range_);
-  // Set Boundaries of Exploration
-  params_->camera_model_.setBoundingBox(params_->bbx_min_, params_->bbx_max_);
-
   if (params_->log_) {
     file_response_.open((params_->log_path_ + "response.txt").c_str(),
                         std::ios::out);
