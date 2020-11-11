@@ -12,8 +12,7 @@ cs_add_library(${PROJECT_NAME}
         src/rrt.cpp
         src/history.cpp
         src/voxblox_manager.cpp
-        src/camera_model.cpp
-        src/rrt_star.cpp)
+        src/camera_model.cpp)
 
 cs_add_executable(nbvePlanner src/nbv_exp_planner_node.cpp)
 target_link_libraries(nbvePlanner ${PROJECT_NAME})

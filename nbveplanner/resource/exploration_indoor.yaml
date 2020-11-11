@@ -1,17 +1,16 @@
-system/v_max: 1.5
-system/dyaw_max: 1.0
+system/v_max: 1.0
+system/dyaw_max: 0.75
 system/camera/pitch: 0.0
-system/camera/hfov: 86.0
-system/camera/vfov: 57.0
-system/robot_radius: 0.5
+system/camera/hfov: 69.0
+system/camera/vfov: 42.0
+system/robot_radius: 0.4
 system/overshoot: 0.25
 
 nbvep/gain/free: 0.0
 nbvep/gain/occupied: 0.0
-nbvep/gain/unmapped: 1.0
+nbvep/gain/unmapped: 2.0
 nbvep/gain/range: 3.0
-nbvep/gain/zero: 1.0
-nbvep/gain/degressive_coeff: 0.0
+nbvep/gain/zero: 2.0
 
 nbvep/tree/extension_range: 1.0
 nbvep/tree/vicinity_range: 6.0
@@ -30,6 +29,6 @@ bbx/maxY: 14.0
 bbx/minY: -1.0
 
 bbx/maxZ: 3.0
-bbx/minZ: 1.0
+bbx/minZ: 0.0
 
 nbvep/log: false

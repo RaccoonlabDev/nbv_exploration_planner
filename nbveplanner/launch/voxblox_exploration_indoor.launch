@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="ISO-8859-15"?>
 <launch>
     <arg name="mav_name" default="iris"/>
-    <arg name="waypoint_z" default="1.0" />
+    <arg name="waypoint_z" default="2.0" />
     <arg name="rviz" default="false"/>
     <arg name="rosbag" default="true"/>
     <arg name="param_file" default="$(find nbveplanner)/resource/exploration_indoor.yaml" />

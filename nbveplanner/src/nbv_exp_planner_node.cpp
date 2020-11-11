@@ -56,7 +56,7 @@ void send_path(std::vector<geometry_msgs::Pose> &path) {
     position_control_msg = aux_msg;
     loop_rate.sleep();
   }
-  ros::Duration(1.0).sleep();
+  ros::Duration(2.0).sleep();
 }
 
 bool stop_planner() {

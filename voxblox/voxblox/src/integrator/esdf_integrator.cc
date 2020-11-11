@@ -153,10 +153,11 @@ void EsdfIntegrator::updateFrontiers(const Block<TsdfVoxel>::Ptr& tsdf_block,
     if (is_frontier != tsdf_block->frontiers()[lin_index]) {
       // Update the new value in the block
       tsdf_block->frontiers().set(lin_index, is_frontier);
-      if (tsdf_block->frontiers().count() > 256) {
-        // Mark it as updated
-        tsdf_block->updated().set(Update::kFrontier, true);
-      }
+      //size_t frontiers_count = tsdf_block->frontiers().count();
+      //if (frontiers_count == 257 or  frontiers_count == 256) {
+      // Mark it as updated
+      tsdf_block->updated().set(Update::kFrontier, true);
+      //}
     }
   }
 }

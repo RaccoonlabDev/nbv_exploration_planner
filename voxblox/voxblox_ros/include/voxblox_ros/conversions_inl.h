@@ -42,7 +42,7 @@ void serializeFrontiersAsMsg(Layer<VoxelType>* layer, bool only_updated,
       marker_msg.id = block->id();
       marker_msg.header.stamp = ros::Time::now();
       // If true, we consider it as a frontier block
-      if (block->frontiers().count() > 256) {
+      if (block->frontiers().any()) {
         marker_msg.points.reserve(block->frontiers().count());
         Point voxel_origin;
         geometry_msgs::Point point_msg;
