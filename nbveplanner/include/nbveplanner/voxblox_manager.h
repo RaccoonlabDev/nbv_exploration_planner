@@ -32,12 +32,14 @@ class VoxbloxManager {
 
   VoxelStatus getVoxelStatus(const Point &position) const;
 
-  bool checkCollisionWithRobotAtVoxel(
-      const voxblox::GlobalIndex &global_index) const;
+  bool checkCollisionWithRobotAtVoxel(const voxblox::GlobalIndex &global_index,
+                                      bool is_unknown_collision) const;
 
-  bool checkMotion(const Point &start, const Point &end);
+  bool checkMotion(const Point &start, const Point &end,
+                   bool is_unknown_collision);
 
-  bool checkMotion(const Pose &start4d, const Pose &end4d);
+  bool checkMotion(const Pose &start4d, const Pose &end4d,
+                   bool is_unknown_collision);
 
   double getResolution() const { return tsdf_layer_->voxel_size(); }
 

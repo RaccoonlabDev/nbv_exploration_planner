@@ -8,8 +8,7 @@ namespace nbveplanner {
 
 VoxbloxManager::VoxbloxManager(const ros::NodeHandle &nh,
                                const ros::NodeHandle &nh_private,
-                               Params *params,
-                               const std::string &ns)
+                               Params *params, const std::string &ns)
     : nh_(nh),
       nh_private_(nh_private),
       esdf_server_(nh, nh_private, ns),
@@ -59,16 +58,17 @@ VoxbloxManager::VoxelStatus VoxbloxManager::getVoxelStatus(
 }
 
 bool VoxbloxManager::checkCollisionWithRobotAtVoxel(
-    const voxblox::GlobalIndex &global_index) const {
+    const voxblox::GlobalIndex &global_index, bool is_unknown_collision) const {
   voxblox::EsdfVoxel *voxel =
       esdf_layer_->getVoxelPtrByGlobalIndex(global_index);
   if (voxel == nullptr) {
-    return true;
+    return is_unknown_collision;
   }
   return params_->robot_radius_ >= voxel->distance;
 }
 
-bool VoxbloxManager::checkMotion(const Point &start, const Point &end) {
+bool VoxbloxManager::checkMotion(const Point &start, const Point &end,
+                                 bool is_unknown_collision) {
   voxblox::Point start_scaled, end_scaled;
   voxblox::AlignedVector<voxblox::GlobalIndex> indices;
 
@@ -78,7 +78,8 @@ bool VoxbloxManager::checkMotion(const Point &start, const Point &end) {
 
   voxblox::castRay(start_scaled, end_scaled, &indices);
   for (const auto &global_index : indices) {
-    bool collision = checkCollisionWithRobotAtVoxel(global_index);
+    bool collision =
+        checkCollisionWithRobotAtVoxel(global_index, is_unknown_collision);
     if (collision) {
       return false;
     }
@@ -86,7 +87,8 @@ bool VoxbloxManager::checkMotion(const Point &start, const Point &end) {
   return true;
 }
 
-bool VoxbloxManager::checkMotion(const Pose &start4d, const Pose &end4d) {
+bool VoxbloxManager::checkMotion(const Pose &start4d, const Pose &end4d,
+                                 bool is_unknown_collision) {
   Point start = {start4d.x(), start4d.y(), start4d.z()};
   Point end = {end4d.x(), end4d.y(), end4d.z()};
   voxblox::Point start_scaled, end_scaled;
@@ -98,7 +100,8 @@ bool VoxbloxManager::checkMotion(const Pose &start4d, const Pose &end4d) {
 
   voxblox::castRay(start_scaled, end_scaled, &indices);
   for (const auto &global_index : indices) {
-    bool collision = checkCollisionWithRobotAtVoxel(global_index);
+    bool collision =
+        checkCollisionWithRobotAtVoxel(global_index, is_unknown_collision);
     if (collision) {
       return false;
     }

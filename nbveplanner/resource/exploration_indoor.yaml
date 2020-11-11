@@ -18,7 +18,7 @@ nbvep/tree/init_iterations: 5
 nbvep/tree/cutoff_iterations: 50
 nbvep/dt: 0.1
 
-nbvep/graph/zero_frontier_voxels: 5.0
+nbvep/graph/zero_frontier_voxels: 8.0
 nbvep/graph/node_vicinity_range: 6.0
 
 # bounding box: necessary to limit the volume

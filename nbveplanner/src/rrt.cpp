@@ -217,8 +217,10 @@ void RrtTree::iterate() {
     newState[2] = origin[2] + direction[2];
 
     if (manager_->checkMotion(
-            origin, direction + origin +
-                        direction.normalized() * params_->dist_overshoot_)) {
+            origin,
+            direction + origin +
+                direction.normalized() * params_->dist_overshoot_,
+            true)) {
       // Create new node and insert into tree
       double num_unmapped = gain2(newState);
       auto *newNode = new Node;
@@ -342,7 +344,7 @@ void RrtTree::getBestBranch(std::vector<geometry_msgs::Pose> &path,
   pathNodes.emplace_back(bestNode_);
   while (current->parent_ != nullptr) {
     if (not manager_->checkMotion(pathNodes.back()->state_,
-                                  current->parent_->state_)) {
+                                  current->parent_->state_, true)) {
       pathNodes.emplace_back(current);
     }
     current = current->parent_;

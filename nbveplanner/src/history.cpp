@@ -251,7 +251,7 @@ bool History::refineVertexPosition(Vertex *v) {
     if (refined) {
       bool connected = true;
       for (const auto &n : v->adj) {
-        if (not manager_->checkMotion(refinedPos, n.first->pos)) {
+        if (not manager_->checkMotion(refinedPos, n.first->pos, true)) {
           connected = false;
           break;
         }
@@ -462,8 +462,9 @@ void History::sampleBranch(const std::vector<Vertex *> &pathNodes,
   auto iter_start = pathNodes.rbegin();
   auto iter_end = pathNodes.rend() - 1;
   while (iter_start != iter_end) {
-    while (iter_end != (iter_start + 1) and
-           not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos)) {
+    while (
+        iter_end != (iter_start + 1) and
+        not manager_->checkMotion((*iter_start)->pos, (*iter_end)->pos, true)) {
       iter_end -= 1;
     }
     start = {(*iter_start)->pos.x(), (*iter_start)->pos.y(),
@@ -515,7 +516,7 @@ void History::addVertex(const geometry_msgs::Point &point) {
   graph.emplace_back(Vertex{.pos = pos, .potential_gain = -1, .id = point_id_});
   Vertex *v = &(*graph.rbegin());
 
-  point_msg.header.stamp = ros::Time();
+  point_msg.header.stamp = ros::Time::now();
   point_msg.id = point_id_;
   point_msg.action = visualization_msgs::Marker::ADD;
   point_msg.pose.position = point;
@@ -531,20 +532,7 @@ void History::addVertex(const geometry_msgs::Point &point) {
 void History::addVertexAndConnect(const geometry_msgs::Point &point,
                                   const Eigen::Vector3d &state,
                                   double potential_gain) {
-  graph.emplace_back(
-      Vertex{.pos = state, .potential_gain = potential_gain, .id = point_id_});
-
-  point_msg.header.stamp = ros::Time();
-  point_msg.action = visualization_msgs::Marker::ADD;
-  point_msg.id = point_id_;
-  point_msg.pose.position = point;
-  point_msg.color = gain_color_;
-  graph_nodes_pub_.publish(point_msg);
-  ++point_id_;
-
-  Vertex *newVertex = &(*graph.rbegin());
-  activeNodes.insert(newVertex);
-
+  // First we should check if there is a node nearby
   kdres *nearest_set =
       kd_nearest_range3(kdTree_, state.x(), state.y(), state.z(), 3.0);
   int n = kd_res_size(nearest_set);
@@ -553,14 +541,21 @@ void History::addVertexAndConnect(const geometry_msgs::Point &point,
     ROS_WARN("No node nearby the area");
     return;
   }
+
+  graph.emplace_back(
+      Vertex{.pos = state, .potential_gain = potential_gain, .id = point_id_});
+
+  Vertex *newVertex = &(*graph.rbegin());
+
+  // Check if we can connect the new node to the history graph
   unsigned int copy_edge_id = edge_id_;
   Vertex *v;
   for (int i = 0; i < n; ++i) {
     v = (Vertex *)kd_res_item_data(nearest_set);
-    if (manager_->checkMotion(state, v->pos)) {
+    if (manager_->checkMotion(state, v->pos, true)) {
       newVertex->adj.insert(std::make_pair(v, edge_id_));
       v->adj.insert(std::make_pair(newVertex, edge_id_));
-      line.header.stamp = ros::Time();
+      line.header.stamp = ros::Time::now();
       line.action = visualization_msgs::Marker::ADD;
       line.id = edge_id_;
       line.points[0] = point;
@@ -571,27 +566,39 @@ void History::addVertexAndConnect(const geometry_msgs::Point &point,
     kd_res_next(nearest_set);
   }
   kd_res_free(nearest_set);
-  // Force connection with the closest node if no other node succeeded
+
   if (copy_edge_id == edge_id_) {
     kdres *nearest = kd_nearest3(kdTree_, state.x(), state.y(), state.z());
-    if (kd_res_size(nearest) <= 0) {
-      kd_res_free(nearest);
-      ROS_WARN("No node nearby the area");
-      return;
-    }
     auto *nearest_vertex = (Vertex *)kd_res_item_data(nearest);
     kd_res_free(nearest);
-    newVertex->adj.insert(std::make_pair(nearest_vertex, edge_id_));
-    nearest_vertex->adj.insert(std::make_pair(newVertex, edge_id_));
-    line.header.stamp = ros::Time();
-    line.action = visualization_msgs::Marker::ADD;
-    line.id = edge_id_;
-    line.points[0] = point;
-    line.points[1] = getPointFromEigen(nearest_vertex->pos);
-    graph_edges_pub_.publish(line);
-    ++edge_id_;
+    if (manager_->checkMotion(state, v->pos, false)) {
+      // Force connection with the closest node if no other node succeeded
+      newVertex->adj.insert(std::make_pair(nearest_vertex, edge_id_));
+      nearest_vertex->adj.insert(std::make_pair(newVertex, edge_id_));
+      line.header.stamp = ros::Time::now();
+      line.action = visualization_msgs::Marker::ADD;
+      line.id = edge_id_;
+      line.points[0] = point;
+      line.points[1] = getPointFromEigen(nearest_vertex->pos);
+      graph_edges_pub_.publish(line);
+      ++edge_id_;
+    }
+    else {
+      // Delete node from the graph because no collision-free connection was
+      // possible
+      graph.pop_back();
+    }
+  } else {
+    point_msg.header.stamp = ros::Time::now();
+    point_msg.action = visualization_msgs::Marker::ADD;
+    point_msg.id = point_id_;
+    point_msg.pose.position = point;
+    point_msg.color = gain_color_;
+    graph_nodes_pub_.publish(point_msg);
+    ++point_id_;
+    activeNodes.insert(newVertex);
+    kd_insert3(kdTree_, state.x(), state.y(), state.z(), newVertex);
   }
-  kd_insert3(kdTree_, state.x(), state.y(), state.z(), newVertex);
 }
 
 geometry_msgs::Point History::getPointFromEigen(const Eigen::Vector3d &vec) {
