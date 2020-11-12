@@ -475,6 +475,7 @@ double RrtTree::gain2(Pose &state) {
   return max_gain * cubic_voxel_size;
 }
 
+/*
 void RrtTree::gain(Pose state, double &maxGainFound, double &orientationFound) {
   double gain = 0.0;
   int checked_voxels = 0;
@@ -523,6 +524,7 @@ void RrtTree::gain(Pose state, double &maxGainFound, double &orientationFound) {
   // gain /= checked_voxels;
   compareGain(state, gain, maxGainFound, orientationFound);
 }
+*/
 
 void RrtTree::compareGain(Pose &state, double gain, double &maxGainFound,
                           double &orientationFound) {

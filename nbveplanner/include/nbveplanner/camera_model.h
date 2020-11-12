@@ -33,7 +33,7 @@ class CameraModel {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  CameraModel() : initialized_(false) {}
+  CameraModel() : initialized_(false), no_horizontal_limit_(false) {}
   virtual ~CameraModel() = default;
 
   /// Set up the camera model, intrinsics and extrinsics.
@@ -54,7 +54,8 @@ class CameraModel {
   /// Check whether a point belongs in the current view.
   bool isPointInView(const Point& point) const;
 
-  void getAabb(Point* aabb_min, Point* aabb_max) const;
+  void getAabb(AlignedVector<Point>& aabb_min,
+               AlignedVector<Point>& aabb_max) const;
 
   /**
    * Accessor functions for visualization (or other reasons).
@@ -78,6 +79,7 @@ class CameraModel {
   void calculateBoundingPlanes();
 
   bool initialized_;
+  bool no_horizontal_limit_;
 
   /// Current pose of the camera.
   Transformation T_G_C_;
@@ -95,8 +97,8 @@ class CameraModel {
    * AABB (Axis Aligned Bounding Box). Expressed in global coordinate frame.
    */
   AlignedVector<Plane> bounding_planes_;
-  Point aabb_min_;
-  Point aabb_max_;
+  AlignedVector<Point> aabb_min_;
+  AlignedVector<Point> aabb_max_;
 
   Point bbx_min_;
   Point bbx_max_;

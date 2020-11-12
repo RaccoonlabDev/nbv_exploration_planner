@@ -29,11 +29,19 @@ void CameraModel::setIntrinsicsFromFoV(double horizontal_fov_deg,
   // Given this information, create 6 bounding planes, assuming the camera is
   // pointing with in the positive X direction.
   corners_C_.clear();
-  corners_C_.reserve(8);
 
-  double horizontal_fov = horizontal_fov_deg * M_PI / 180.0;
+  double horizontal_fov;
+
+  if (horizontal_fov_deg == 360.0) {
+    no_horizontal_limit_ = true;
+    corners_C_.reserve(32);
+    horizontal_fov = 90.0 * M_PI / 180.0;
+  } else {
+    corners_C_.reserve(8);
+    horizontal_fov = horizontal_fov_deg * M_PI / 180.0;
+  }
+
   double vertical_fov = vertical_fov_deg * M_PI / 180.0;
-
   double tan_half_hfov = std::tan(horizontal_fov / 2.0);
   double tan_half_vfov = std::tan(vertical_fov / 2.0);
 
@@ -64,6 +72,13 @@ void CameraModel::setIntrinsicsFromFoV(double horizontal_fov_deg,
   corners_C_.emplace_back(Point(max_distance, -max_distance * tan_half_hfov,
                                 max_distance * tan_half_vfov));
 
+  if (no_horizontal_limit_) {
+    kindr::minimal::AngleAxisTemplate<double> R(M_PI_2,
+                                                Eigen::Vector3d::UnitZ());
+    for (size_t i = 0; i < 24; ++i) {
+      corners_C_.emplace_back(R.rotate(corners_C_[i]));
+    }
+  }
   initialized_ = true;
 }
 
@@ -85,9 +100,16 @@ void CameraModel::calculateBoundingPlanes() {
     return;
   }
 
-  CHECK_EQ(corners_C_.size(), 8u);
-  if (bounding_planes_.empty()) {
-    bounding_planes_.resize(6);
+  if (no_horizontal_limit_) {
+    CHECK_EQ(corners_C_.size(), 32u);
+    if (bounding_planes_.empty()) {
+      bounding_planes_.resize(24);
+    }
+  } else {
+    CHECK_EQ(corners_C_.size(), 8u);
+    if (bounding_planes_.empty()) {
+      bounding_planes_.resize(6);
+    }
   }
 
   AlignedVector<Point> corners_G;
@@ -98,55 +120,75 @@ void CameraModel::calculateBoundingPlanes() {
     corners_G[i] = T_G_C_ * corners_C_[i];
   }
 
-  // Near plane.
-  bounding_planes_[0].setFromPoints(corners_G[0], corners_G[2], corners_G[1]);
-  VLOG(5) << "Near plane: Normal: " << bounding_planes_[0].normal().transpose()
-          << " distance: " << bounding_planes_[0].distance();
-  // Far plane.
-  bounding_planes_[1].setFromPoints(corners_G[4], corners_G[5], corners_G[6]);
-  VLOG(5) << "Far plane: Normal: " << bounding_planes_[1].normal().transpose()
-          << " distance: " << bounding_planes_[1].distance();
+  for (size_t i = 0; i < (int)(bounding_planes_.size() / 6); ++i) {
+    // Near plane.
+    bounding_planes_[i * 6].setFromPoints(
+        corners_G[i * 8], corners_G[i * 8 + 2], corners_G[i * 8 + 1]);
+    VLOG(5) << "Near plane: Normal: "
+            << bounding_planes_[i * 8].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8].distance();
+    // Far plane.
+    bounding_planes_[i * 6 + 1].setFromPoints(
+        corners_G[i * 8 + 4], corners_G[i * 8 + 5], corners_G[i * 8 + 6]);
+    VLOG(5) << "Far plane: Normal: "
+            << bounding_planes_[i * 8 + 1].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 1].distance();
 
-  // Left.
-  bounding_planes_[2].setFromPoints(corners_G[3], corners_G[6], corners_G[2]);
-  VLOG(5) << "Left plane: Normal: " << bounding_planes_[2].normal().transpose()
-          << " distance: " << bounding_planes_[2].distance();
+    // Left.
+    bounding_planes_[i * 6 + 2].setFromPoints(
+        corners_G[i * 8 + 3], corners_G[i * 8 + 6], corners_G[i * 8 + 2]);
+    VLOG(5) << "Left plane: Normal: "
+            << bounding_planes_[i * 8 + 2].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 2].distance();
 
-  // Right.
-  bounding_planes_[3].setFromPoints(corners_G[0], corners_G[5], corners_G[4]);
-  VLOG(5) << "Right plane: Normal: " << bounding_planes_[3].normal().transpose()
-          << " distance: " << bounding_planes_[3].distance();
+    // Right.
+    bounding_planes_[i * 6 + 3].setFromPoints(
+        corners_G[i * 8], corners_G[i * 8 + 5], corners_G[i * 8 + 4]);
+    VLOG(5) << "Right plane: Normal: "
+            << bounding_planes_[i * 8 + 3].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 3].distance();
 
-  // Top.
-  bounding_planes_[4].setFromPoints(corners_G[3], corners_G[4], corners_G[7]);
-  VLOG(5) << "Top plane: Normal: " << bounding_planes_[4].normal().transpose()
-          << " distance: " << bounding_planes_[4].distance();
+    // Top.
+    bounding_planes_[i * 6 + 4].setFromPoints(
+        corners_G[i * 8 + 3], corners_G[i * 8 + 4], corners_G[i * 8 + 7]);
+    VLOG(5) << "Top plane: Normal: "
+            << bounding_planes_[i * 8 + 4].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 4].distance();
 
-  // Bottom.
-  bounding_planes_[5].setFromPoints(corners_G[2], corners_G[6], corners_G[5]);
-  VLOG(5) << "Bottom plane: Normal: "
-          << bounding_planes_[5].normal().transpose()
-          << " distance: " << bounding_planes_[5].distance();
-
-  // Calculate AABB.
-  aabb_min_.setConstant(std::numeric_limits<double>::max());
-  aabb_max_.setConstant(std::numeric_limits<double>::lowest());
-
-  for (int i = 0; i < 3; i++) {
-    for (auto &j : corners_G) {
-      aabb_min_(i) = std::min(aabb_min_(i), j(i));
-      aabb_max_(i) = std::max(aabb_max_(i), j(i));
-    }
+    // Bottom.
+    bounding_planes_[i * 6 + 5].setFromPoints(
+        corners_G[i * 8 + 2], corners_G[i * 8 + 6], corners_G[i * 8 + 5]);
+    VLOG(5) << "Bottom plane: Normal: "
+            << bounding_planes_[i * 8 + 5].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 5].distance();
   }
 
-  VLOG(5) << "AABB min:\n"
-          << aabb_min_.transpose() << "\nAABB max:\n"
-          << aabb_max_.transpose();
+  if (no_horizontal_limit_) {
+    aabb_min_.resize(4);
+    aabb_max_.resize(4);
+  }
+  for (size_t k = 0; k < 4; ++k) {
+    // Calculate AABB.
+    aabb_min_[k].setConstant(std::numeric_limits<double>::max());
+    aabb_max_[k].setConstant(std::numeric_limits<double>::lowest());
+
+    for (size_t i = 0; i < 3; i++) {
+      for (auto &j : corners_G) {
+        aabb_min_[k](i) = std::min(aabb_min_[k](i), j(i));
+        aabb_max_[k](i) = std::max(aabb_max_[k](i), j(i));
+      }
+    }
+
+    VLOG(5) << "AABB min:\n"
+            << aabb_min_[k].transpose() << "\nAABB max:\n"
+            << aabb_max_[k].transpose();
+  }
 }
 
-void CameraModel::getAabb(Point *aabb_min, Point *aabb_max) const {
-  *aabb_min = aabb_min_;
-  *aabb_max = aabb_max_;
+void CameraModel::getAabb(AlignedVector<Point> &aabb_min,
+                          AlignedVector<Point> &aabb_max) const {
+  aabb_min = aabb_min_;
+  aabb_max = aabb_max_;
 }
 
 bool CameraModel::isPointInView(const Point &point) const {

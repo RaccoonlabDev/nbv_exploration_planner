@@ -3,7 +3,7 @@
     <arg name="mav_name" default="iris"/>
     <arg name="waypoint_z" default="1.0" />
     <arg name="rviz" default="false"/>
-    <arg name="rosbag" default="true"/>
+    <arg name="rosbag" default="false"/>
     <arg name="param_file" default="$(find nbveplanner)/resource/exploration_indoor.yaml" />
     <arg name="tf_frame" default="map" />
     <arg name="camera_frame" default="camera"/>
