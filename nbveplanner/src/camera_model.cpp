@@ -167,28 +167,26 @@ void CameraModel::calculateBoundingPlanes() {
     aabb_min_.resize(4);
     aabb_max_.resize(4);
   }
-  for (size_t k = 0; k < 4; ++k) {
-    // Calculate AABB.
-    aabb_min_[k].setConstant(std::numeric_limits<double>::max());
-    aabb_max_[k].setConstant(std::numeric_limits<double>::lowest());
+  // Calculate AABB.
+  aabb_min_.setConstant(std::numeric_limits<double>::max());
+  aabb_max_.setConstant(std::numeric_limits<double>::lowest());
 
-    for (size_t i = 0; i < 3; i++) {
-      for (auto &j : corners_G) {
-        aabb_min_[k](i) = std::min(aabb_min_[k](i), j(i));
-        aabb_max_[k](i) = std::max(aabb_max_[k](i), j(i));
-      }
+  for (size_t i = 0; i < 3; i++) {
+    for (auto &j : corners_G) {
+      aabb_min_(i) = std::min(aabb_min_(i), j(i));
+      aabb_max_(i) = std::max(aabb_max_(i), j(i));
     }
-
-    VLOG(5) << "AABB min:\n"
-            << aabb_min_[k].transpose() << "\nAABB max:\n"
-            << aabb_max_[k].transpose();
   }
+
+  VLOG(5) << "AABB min:\n"
+          << aabb_min_.transpose() << "\nAABB max:\n"
+          << aabb_max_.transpose();
 }
 
-void CameraModel::getAabb(AlignedVector<Point> &aabb_min,
-                          AlignedVector<Point> &aabb_max) const {
-  aabb_min = aabb_min_;
-  aabb_max = aabb_max_;
+void CameraModel::getAabb(Point *aabb_min,
+                          Point *aabb_max) const {
+  *aabb_min = aabb_min_;
+  *aabb_max = aabb_max_;
 }
 
 bool CameraModel::isPointInView(const Point &point) const {

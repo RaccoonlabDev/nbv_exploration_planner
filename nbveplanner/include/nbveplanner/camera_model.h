@@ -54,8 +54,7 @@ class CameraModel {
   /// Check whether a point belongs in the current view.
   bool isPointInView(const Point& point) const;
 
-  void getAabb(AlignedVector<Point>& aabb_min,
-               AlignedVector<Point>& aabb_max) const;
+  void getAabb(Point* aabb_min, Point* aabb_max) const;
 
   /**
    * Accessor functions for visualization (or other reasons).
@@ -97,8 +96,8 @@ class CameraModel {
    * AABB (Axis Aligned Bounding Box). Expressed in global coordinate frame.
    */
   AlignedVector<Plane> bounding_planes_;
-  AlignedVector<Point> aabb_min_;
-  AlignedVector<Point> aabb_max_;
+  Point aabb_min_;
+  Point aabb_max_;
 
   Point bbx_min_;
   Point bbx_max_;
