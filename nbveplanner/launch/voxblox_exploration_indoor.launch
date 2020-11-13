@@ -64,6 +64,9 @@
 
             <param name="use_tf_transforms" value="true" />
             <param name="world_frame" value="$(arg tf_frame)" />
+            <param name="clear_sphere_for_planning" value="true"/>
+            <param name="clear_sphere_radius" value="0.4"/>
+            <param name="occupied_sphere_radius" value="0.0"/>
             <param name="verbose" value="false" />
 
             <!-- VOXBLOX LOW RESOLUTION PARAMETERS -->
