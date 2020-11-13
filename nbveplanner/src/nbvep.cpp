@@ -7,7 +7,7 @@ nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
                          const ros::NodeHandle &nh_private)
     : nh_(nh), nh_private_(nh_private), params_(std::make_unique<Params>()) {
   params_->setParametersFromRos(nh_private_);
-  setCameraFrame();
+  setUpCamera();
   params_->inspection_path_ =
       nh_.advertise<visualization_msgs::Marker>("inspectionPath", 1);
   params_->exploration_tree_ =
@@ -38,13 +38,20 @@ nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
   ROS_INFO("Planner All Set");
 }
 
-void nbvePlanner::setCameraFrame() const {
+void nbvePlanner::setUpCamera() const {
+  // Set camera FOV
+  params_->camera_model_.setIntrinsicsFromFoV(
+      params_->camera_hfov_, params_->camera_vfov_, params_->sensor_min_range_,
+      params_->gain_range_);
+  // Set Boundaries of Exploration
+  params_->camera_model_.setBoundingBox(params_->bbx_min_, params_->bbx_max_);
+  // Set camera frame transformation
   static tf::TransformListener listener;
   tf::StampedTransform stamped_transform;
 
   try {
-    listener.waitForTransform(params_->camera_frame_, "base_link", ros::Time::now(),
-                              ros::Duration(3.0));
+    listener.waitForTransform(params_->camera_frame_, "base_link",
+                              ros::Time::now(), ros::Duration(3.0));
     listener.lookupTransform(params_->camera_frame_, "base_link", ros::Time(0),
                              stamped_transform);
   } catch (tf::TransformException &ex) {

@@ -61,7 +61,7 @@ class nbvePlanner {
 
   ~nbvePlanner();
 
-  void setCameraFrame() const;
+  void setUpCamera() const;
 
   void poseCovCallback(const geometry_msgs::PoseWithCovarianceStamped &pose);
 
