@@ -59,12 +59,9 @@ class RrtTree : public TreeBase {
 
   void modifyColorNode(int id);
 
-  double gain2(Pose &state);
+  double optimized_gain(Pose &state);
 
-  void gain(Pose state, double &maxGainFound, double &orientationFound);
-
-  void compareGain(Pose &state, double gain, double &maxGainFound,
-                   double &orientationFound);
+  double gain(Pose &state);
 
   std::vector<geometry_msgs::Pose> samplePath(Pose start, Pose end,
                                               const std::string &targetFrame);

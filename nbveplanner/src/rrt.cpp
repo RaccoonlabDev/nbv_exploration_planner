@@ -213,7 +213,13 @@ void RrtTree::iterate() {
             origin, direction + origin +
                         direction.normalized() * params_->dist_overshoot_)) {
       // Create new node and insert into tree
-      double num_unmapped = gain2(newState);
+      double num_unmapped;
+      if (params_->camera_model_.hasHorizontalLimit()) {
+        num_unmapped = optimized_gain(newState);
+      }
+      else {
+        num_unmapped = gain(newState);
+      }
       auto *newNode = new Node;
       newNode->state_ = newState;
       newNode->parent_ = newParent;
@@ -345,7 +351,7 @@ void RrtTree::getBestBranch(std::vector<geometry_msgs::Pose> &path,
   exact_root_ = current->state_;
 }
 
-double RrtTree::gain2(Pose &state) {
+double RrtTree::optimized_gain(Pose &state) {
   static const double voxel_size = manager_lowres_->getResolution();
   static const double voxel_size_inv = 1.0 / voxel_size;
   static const int voxels_per_side = manager_lowres_->getVoxelsPerSide();
@@ -371,7 +377,7 @@ double RrtTree::gain2(Pose &state) {
         params_->camera_model_.getCameraPose().getPosition();
 
     // Get the three points defining the back plane of the camera frustum.
-    params_->camera_model_.getFarPlanePoints(&plane_points);
+    params_->camera_model_.getFarPlanePoints(0, &plane_points);
 
     // We map the plane into u and v coordinates, which are the plane's
     // coordinate system, with the origin at plane_points[1] and outer bounds at
@@ -475,64 +481,104 @@ double RrtTree::gain2(Pose &state) {
   return max_gain * cubic_voxel_size;
 }
 
-/*
-void RrtTree::gain(Pose state, double &maxGainFound, double &orientationFound) {
+double RrtTree::gain(Pose &state) {
+  static const double voxel_size = manager_lowres_->getResolution();
+  static const double voxel_size_inv = 1.0 / voxel_size;
+  static const int voxels_per_side = manager_lowres_->getVoxelsPerSide();
+  static const double voxels_per_side_inv = 1.0 / voxels_per_side;
+  static const double cubic_voxel_size = CUBE(voxel_size);
+
+  const Point position_mav(state[0], state[1], state[2]);
+  voxblox::HierarchicalIndexSet checked_voxels_set;
+  Eigen::Quaterniond orientation;
+  Transformation T_G_B;
+  double yaw;
+  AlignedVector<Point> plane_points;
+  Point u_distance, u_slope, v_center;
+  int u_max;
+
   double gain = 0.0;
-  int checked_voxels = 0;
+  for (int i = -180; i < 180; ++i) {
+    yaw = M_PI * i / 180.0;
+    orientation = Eigen::AngleAxisd(yaw, Point::UnitZ());
+    T_G_B = Transformation(position_mav, orientation);
+    params_->camera_model_.setBodyPose(T_G_B);
+    const Point camera_position =
+        params_->camera_model_.getCameraPose().getPosition();
 
-  Point origin(state[0], state[1], state[2]);
-  Eigen::Quaterniond quaternion;
-  quaternion = Eigen::AngleAxisd(state[3], Eigen::Vector3d::UnitZ());
-  Transformation T_G_B(origin, quaternion);
-  params_->camera_model_.setBodyPose(T_G_B);
+    // Get the three points defining the back plane of the camera frustum.
+    params_->camera_model_.getFarPlanePoints(0, &plane_points);
 
-  // Get the boundaries of the current view.
-  Point aabb_min, aabb_max;
-  params_->camera_model_.getAabb(&aabb_min, &aabb_max);
+    // We map the plane into u and v coordinates, which are the plane's
+    // coordinate system, with the origin at plane_points[1] and outer bounds at
+    // plane_points[0] and plane_points[2].
+    u_distance = plane_points[0] - plane_points[1];
+    u_slope = u_distance.normalized();
+    u_max = static_cast<int>(std::ceil(u_distance.norm() * voxel_size_inv));
+    v_center = (plane_points[2] - plane_points[1]) / 2.0;
 
-  // Get the center of the camera to raycast to.
-  // Transformation camera_pose = params_->camera_model_.getCameraPose();
-  // Point camera_center = camera_pose.getPosition();
+    Point pos;
+    voxblox::GlobalIndex global_voxel_idx;
+    voxblox::BlockIndex block_index;
+    voxblox::VoxelIndex voxel_index;
+    // We then iterate over all the voxels in the coordinate space of the
+    // horizontal center back bounding plane of the frustum.
+    for (int u = 0; u < u_max; ++u) {
+      // Get the 'real' coordinates back from the plane coordinate space.
+      pos = plane_points[1] + u * u_slope * voxel_size + v_center;
 
-  Point point;
-  // double rangeSq = pow(params_->gainRange_, 2.0);
-  double res = manager_lowres_->getResolution();
-  // Iterate over all nodes within the allowed distance
-  for (point.x() = aabb_min.x(); point.x() < aabb_max.x(); point.x() += res) {
-    for (point.y() = aabb_min.y(); point.y() < aabb_max.y(); point.y() += res) {
-      for (point.z() = aabb_min.z(); point.z() < aabb_max.z();
-           point.z() += res) {
-        // TODO: Check if frustum is inside bounding box
-        if (params_->camera_model_.isPointInView(point)) {
-          if (VoxbloxManager::kOccupied !=
-              this->manager_lowres_->getVisibility(origin, point, false)) {
-            VoxbloxManager::VoxelStatus node =
-                manager_lowres_->getVoxelStatus(point);
-            if (node == VoxbloxManager::kUnknown) {
-              gain += params_->gain_unmapped_;
-            } else if (node == VoxbloxManager::kOccupied) {
-              gain += params_->gain_occupied_;
-            } else {
-              gain += params_->gain_free_;
-            }
+      global_voxel_idx =
+          (voxel_size_inv * pos).cast<voxblox::LongIndexElement>();
+      block_index = voxblox::getBlockIndexFromGlobalVoxelIndex(
+          global_voxel_idx, voxels_per_side_inv);
+      voxel_index = voxblox::getLocalFromGlobalVoxelIndex(global_voxel_idx,
+                                                          voxels_per_side);
+      if (checked_voxels_set[block_index].count(voxel_index) > 0) {
+        continue;
+      }
+
+      const voxblox::Point start_scaled =
+          (camera_position * voxel_size_inv).cast<voxblox::FloatingPoint>();
+      const voxblox::Point end_scaled =
+          (pos * voxel_size_inv).cast<voxblox::FloatingPoint>();
+
+      voxblox::LongIndexVector global_voxel_indices;
+      voxblox::castRay(start_scaled, end_scaled, &global_voxel_indices);
+
+      voxblox::BlockIndex block_index_ray;
+      voxblox::VoxelIndex voxel_index_ray;
+
+      for (const voxblox::GlobalIndex &global_index_ray :
+          global_voxel_indices) {
+        block_index_ray = voxblox::getBlockIndexFromGlobalVoxelIndex(
+            global_index_ray, voxels_per_side_inv);
+        voxel_index_ray = voxblox::getLocalFromGlobalVoxelIndex(
+            global_index_ray, voxels_per_side);
+
+        bool voxel_checked = false;
+        if (checked_voxels_set[block_index_ray].count(voxel_index_ray) > 0) {
+          voxel_checked = true;
+        }
+
+        Point recovered_pos = global_index_ray.cast<double>() * voxel_size;
+        if (not voxel_checked and
+            params_->camera_model_.isPointInView(recovered_pos)) {
+          VoxbloxManager::VoxelStatus status =
+              manager_lowres_->getVoxelStatus(block_index_ray, voxel_index_ray);
+          if (status == VoxbloxManager::kUnknown) {
+            gain += params_->gain_unmapped_;
+          } else if (status == VoxbloxManager::kOccupied) {
+            gain += params_->gain_occupied_;
+            break;
+          } else {
+            gain += params_->gain_free_;
           }
         }
       }
     }
   }
-  gain *= pow(res, 3.0);
-  // gain /= checked_voxels;
-  compareGain(state, gain, maxGainFound, orientationFound);
-}
-*/
-
-void RrtTree::compareGain(Pose &state, double gain, double &maxGainFound,
-                          double &orientationFound) {
-  std::lock_guard<std::mutex> guard(myMutex);
-  if (gain > maxGainFound) {
-    maxGainFound = gain;
-    orientationFound = state[3];
-  }
+  state[3] = 0.0;
+  return gain * cubic_voxel_size;
 }
 
 std::vector<geometry_msgs::Pose> RrtTree::getPathBackToPrevious(

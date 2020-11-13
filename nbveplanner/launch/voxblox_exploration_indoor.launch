@@ -7,11 +7,12 @@
     <arg name="param_file" default="$(find nbveplanner)/resource/exploration_indoor.yaml" />
     <arg name="tf_frame" default="map" />
     <arg name="camera_frame" default="camera"/>
-    <arg name="pcl_topic" default= "/r200/depth/points" />
+    <arg name="pcl_topic" default= "/velodyne_points" />
     <arg name="pose_cov" default="/mavros/local_position/pose_cov"/>
     <arg name="odom" default="/mavros/local_position/odom" />
     <arg name="sensor_max_range" default="5.0" />
     <arg name="sensor_min_range" default="0.1" />
+    <arg name="initial_motion" default="false"/>
     <arg name="speed_rotate" default="0.5"/>
     <arg name="shift_initial_x" default="0.5"/>
     <arg name="shift_initial_y" default="0.0"/>
@@ -21,11 +22,12 @@
     <arg name="voxel_size" default="0.1" />
     <arg name="lowres_voxel_size" default="0.2"/>
     <arg name="position_controller" default="/goal"/>
-    <arg name="color_mode" default="color"/>
+    <arg name="color_mode" default="normals"/>
 
     <group ns="$(arg mav_name)">
         <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen" args="-alsologtostderr --v=-1">
             <param name="wp_z" type="double" value="$(arg waypoint_z)" />
+            <param name="initial_motion" type="bool" value="$(arg initial_motion)"/>
             <param name="speed_rotate" type="double" value="$(arg speed_rotate)" />
             <param name="shift_initial_x" type="double" value="$(arg shift_initial_x)"/>
             <param name="shift_initial_y" type="double" value="$(arg shift_initial_y)"/>
@@ -64,6 +66,9 @@
 
             <param name="use_tf_transforms" value="true" />
             <param name="world_frame" value="$(arg tf_frame)" />
+            <param name="clear_sphere_for_planning" value="true"/>
+            <param name="clear_sphere_radius" value="0.4"/>
+            <param name="occupied_sphere_radius" value="0.0"/>
             <param name="verbose" value="false" />
 
             <!-- VOXBLOX LOW RESOLUTION PARAMETERS -->

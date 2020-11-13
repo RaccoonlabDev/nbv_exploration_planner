@@ -20,6 +20,7 @@ double dt;
 double wp_z;
 double shift_initial_x, shift_initial_y, shift_initial_z;
 double speed_rotate;
+bool initial_motion;
 std::string frame_id;
 
 geometry_msgs::PoseStamped position_control_msg;
@@ -169,30 +170,38 @@ void initializationMotion() {
   */
   // This is the initialization motion, necessary to known free space that
   // allows the planning of initial paths.
+  if (initial_motion) {
+    ROS_INFO("Starting the planner: Performing initialization motion");
 
-  ROS_INFO("Starting the planner: Performing initialization motion");
+    double step = (2 * M_PI) / (dt * speed_rotate);
+    step = 2 * M_PI / step;
 
-  double step = (2 * M_PI) / (dt * speed_rotate);
-  step = 2 * M_PI / step;
+    ros::Rate loop_rate(1 / dt);
+    for (double i = 0.; i < 2 * M_PI; i += step) {
+      if (request_state.status != nbv_msgs::Status::STATUS_RUN and
+          request_state.status != nbv_msgs::Status::STATUS_WAIT) {
+        stopped = true;
+        return;
+      }
+      position_control_msg.header.frame_id = frame_id;
+      position_control_msg.header.stamp = ros::Time::now();
 
-  ros::Rate loop_rate(1 / dt);
-  for (double i = 0.; i < 2 * M_PI; i += step) {
-    if (request_state.status != nbv_msgs::Status::STATUS_RUN and
-        request_state.status != nbv_msgs::Status::STATUS_WAIT) {
-      stopped = true;
-      return;
+      tf::Quaternion q;
+      q.setRPY(0.0, 0.0, i);
+      geometry_msgs::Quaternion odom_quat;
+      tf::quaternionTFToMsg(q, odom_quat);
+      position_control_msg.pose.orientation = odom_quat;
+
+      pose_pub.publish(position_control_msg);
+      loop_rate.sleep();
     }
+  } else {
     position_control_msg.header.frame_id = frame_id;
     position_control_msg.header.stamp = ros::Time::now();
-
-    tf::Quaternion q;
-    q.setRPY(0.0, 0.0, i);
-    geometry_msgs::Quaternion odom_quat;
-    tf::quaternionTFToMsg(q, odom_quat);
-    position_control_msg.pose.orientation = odom_quat;
-
+    position_control_msg.pose.orientation =
+        planner->local_position_.orientation;
     pose_pub.publish(position_control_msg);
-    loop_rate.sleep();
+    ros::Duration(1.0).sleep();
   }
   planner->initializeHistoryGraph(position_control_msg.pose.position);
   ROS_INFO("History graph initialized");
@@ -337,12 +346,14 @@ int main(int argc, char **argv) {
       nh.serviceClient<mavros_msgs::CommandBool>("/mavros/cmd/arming");
   set_mode_client = nh.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
 
-  const std::string &ns = ros::this_node::getName();
-  nh.param<double>(ns + "/wp_z", wp_z, 1.0);
-  nh.param<double>(ns + "/speed_rotate", speed_rotate, 0.5);
-  nh.param<double>(ns + "/shift_initial_x", shift_initial_x, 0.0);
-  nh.param<double>(ns + "/shift_initial_y", shift_initial_y, 0.0);
-  nh.param<double>(ns + "/shift_initial_z", shift_initial_z, 0.0);
+  nh_private.param<double>("wp_z", wp_z, 1.0);
+  nh_private.param<bool>("initial_motion", initial_motion, true);
+  if (initial_motion) {
+    nh_private.param<double>("speed_rotate", speed_rotate, 0.5);
+    nh_private.param<double>("shift_initial_x", shift_initial_x, 0.0);
+    nh_private.param<double>("shift_initial_y", shift_initial_y, 0.0);
+    nh_private.param<double>("shift_initial_z", shift_initial_z, 0.0);
+  }
   dt = planner->params_->dt_;
   frame_id = planner->params_->frame_id_;
 
