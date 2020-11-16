@@ -169,14 +169,12 @@ void History::reset() {
 
 void History::historyMaintenance() {
   while (not initialized_) {
-    ros::spinOnce();
-    ros::Duration(0.1).sleep();
+    ros::Duration(1.0).sleep();
   }
   ROS_INFO("Start History Graph Maintenance");
   stopped_ = false;
   Point prevPos = graph.back().pos;
   Point currPosEigen;
-  int iter = 0;
   while (ros::ok()) {
     if (not initialized_) {
       stopped_ = true;
@@ -203,13 +201,12 @@ void History::historyMaintenance() {
       if (graph.size() > 1 and not refineVertexPosition(tmp) and
           (tmp->potential_gain > params_->zero_frontier_voxels_ or
            tmp->potential_gain == -1)) {
-        recalculatePotential(tmp);
+        //recalculatePotential(tmp);
       }
       kd_res_next(nearest_set);
     }
     kd_res_free(nearest_set);
     ++iteration_;
-    ros::spinOnce();
   }
 }
 

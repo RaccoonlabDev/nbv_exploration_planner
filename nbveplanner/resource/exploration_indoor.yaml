@@ -1,10 +1,10 @@
 system/v_max: 1.0
 system/dyaw_max: 0.75
 system/camera/pitch: 0.0
-#system/camera/hfov: 69.0 # d435
-#system/camera/vfov: 42.0 # d435
-system/camera/hfov: 360.0 # VLP-16
-system/camera/vfov: 30.0 # VLP-16
+system/camera/hfov: 69.0 # d435
+system/camera/vfov: 42.0 # d435
+#system/camera/hfov: 360.0 # VLP-16
+#system/camera/vfov: 30.0 # VLP-16
 system/robot_radius: 0.4
 system/overshoot: 0.25
 

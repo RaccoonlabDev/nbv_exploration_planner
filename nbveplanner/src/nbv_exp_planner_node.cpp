@@ -57,7 +57,7 @@ void send_path(std::vector<geometry_msgs::Pose> &path) {
     position_control_msg = aux_msg;
     loop_rate.sleep();
   }
-  ros::Duration(2.0).sleep();
+  ros::Duration(1.0).sleep();
 }
 
 bool stop_planner() {
@@ -108,7 +108,6 @@ void start_planner() {
     }
     iteration++;
     loop_rate.sleep();
-    ros::spinOnce();
   }
   stopped = true;
 }
@@ -123,7 +122,6 @@ void initializationMotion() {
   while (not planner->isReady()) {
     ROS_INFO("Waiting initialization Local position");
     ros::Duration(0.1).sleep();
-    ros::spinOnce();
   }
 
   position_control_msg.header.frame_id = frame_id;
@@ -157,7 +155,6 @@ void initializationMotion() {
 
       pose_pub.publish(position_control_msg);
       loop_rate.sleep();
-      ros::spinOnce();
     }
   } else {
     position_control_msg.header.frame_id = frame_id;
@@ -167,7 +164,6 @@ void initializationMotion() {
         planner->local_position_.orientation;
     pose_pub.publish(position_control_msg);
     ros::Duration(1.0).sleep();
-    ros::spinOnce();
   }
   planner->initializeHistoryGraph(position_control_msg.pose.position);
   ROS_INFO("History graph initialized");
@@ -178,8 +174,7 @@ void initializationMotion() {
   position_control_msg.header.stamp = ros::Time::now();
   pose_pub.publish(position_control_msg);
   ros::Duration(1.0).sleep();
-  ros::spinOnce();
-  //start_planner();
+  start_planner();
 }
 
 void publish_pose() {
@@ -327,18 +322,11 @@ int main(int argc, char **argv) {
   exploration_state.status.status = nbv_msgs::Status::STATUS_WAIT;
 
   std::thread pose_t(publish_pose);
-  std::thread t2(&nbveplanner::History::historyMaintenance,
-                 planner->hist_.get());
-  /*std::thread manager_t(private_manager);
-  ros::spin();*/
+  std::thread manager_t(private_manager);
+  pose_t.detach();
+  manager_t.detach();
 
-  ros::Rate rate(1);
-  while(request_state.status != nbv_msgs::Status::STATUS_RUN) {
-    rate.sleep();
-  }
-  exploration_state.status.status = nbv_msgs::Status::STATUS_RUN;
-  initializationMotion();
-  start_planner();
-  pose_t.join();
-  t2.join();
+  ros::AsyncSpinner spinner(0);
+  spinner.start();
+  ros::waitForShutdown();
 }

@@ -7,7 +7,7 @@
     <arg name="param_file" default="$(find nbveplanner)/resource/exploration_indoor.yaml" />
     <arg name="tf_frame" default="map" />
     <arg name="camera_frame" default="camera"/>
-    <arg name="pcl_topic" default= "/velodyne_points" />
+    <arg name="pcl_topic" default= "/r200/depth/points" />
     <arg name="pose_cov" default="/mavros/local_position/pose_cov"/>
     <arg name="odom" default="/mavros/local_position/odom" />
     <arg name="sensor_max_range" default="5.0" />
