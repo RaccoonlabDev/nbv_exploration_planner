@@ -57,7 +57,7 @@ void send_path(std::vector<geometry_msgs::Pose> &path) {
     position_control_msg = aux_msg;
     loop_rate.sleep();
   }
-  ros::Duration(1.0).sleep();
+  ros::Duration(2.0).sleep();
 }
 
 bool stop_planner() {
@@ -108,6 +108,7 @@ void start_planner() {
     }
     iteration++;
     loop_rate.sleep();
+    ros::spinOnce();
   }
   stopped = true;
 }
@@ -121,53 +122,15 @@ void initializationMotion() {
 
   while (not planner->isReady()) {
     ROS_INFO("Waiting initialization Local position");
-    ros::Duration(1.0).sleep();
+    ros::Duration(0.1).sleep();
+    ros::spinOnce();
   }
 
   position_control_msg.header.frame_id = frame_id;
   position_control_msg.pose.position.x = planner->local_position_.position.x;
   position_control_msg.pose.position.y = planner->local_position_.position.y;
   position_control_msg.pose.position.z = wp_z;
-  /*
-    mavros_msgs::SetMode offb_set_mode;
-    offb_set_mode.request.custom_mode = "OFFBOARD";
 
-    mavros_msgs::CommandBool arm_cmd;
-    arm_cmd.request.value = true;
-
-    ros::Time last_request = ros::Time::now();
-
-    while (current_state.mode != "OFFBOARD" or !current_state.armed) {
-      if( current_state.mode != "OFFBOARD" &&
-          (ros::Time::now() - last_request > ros::Duration(1.0))){
-        if( set_mode_client.call(offb_set_mode) &&
-            offb_set_mode.response.mode_sent){
-          ROS_INFO("Offboard enabled");
-        }
-        last_request = ros::Time::now();
-      } else {
-        if( !current_state.armed &&
-            (ros::Time::now() - last_request > ros::Duration(1.0))){
-          if( arming_client.call(arm_cmd) &&
-              arm_cmd.response.success){
-            ROS_INFO("Vehicle armed");
-          }
-          last_request = ros::Time::now();
-        }
-      }
-      position_control_msg.header.stamp = ros::Time::now();
-      //pose_pub.publish(position_control_msg);
-
-      ros::spinOnce();
-      ros::Duration(dt).sleep();
-    }
-
-    for (int i = 0; i < 100; ++i) {
-      position_control_msg.header.stamp = ros::Time::now();
-      pose_pub.publish(position_control_msg);
-      ros::Duration(dt).sleep();
-    }
-  */
   // This is the initialization motion, necessary to known free space that
   // allows the planning of initial paths.
   if (initial_motion) {
@@ -194,14 +157,17 @@ void initializationMotion() {
 
       pose_pub.publish(position_control_msg);
       loop_rate.sleep();
+      ros::spinOnce();
     }
   } else {
     position_control_msg.header.frame_id = frame_id;
     position_control_msg.header.stamp = ros::Time::now();
+    position_control_msg.pose.position = planner->local_position_.position;
     position_control_msg.pose.orientation =
         planner->local_position_.orientation;
     pose_pub.publish(position_control_msg);
     ros::Duration(1.0).sleep();
+    ros::spinOnce();
   }
   planner->initializeHistoryGraph(position_control_msg.pose.position);
   ROS_INFO("History graph initialized");
@@ -212,7 +178,8 @@ void initializationMotion() {
   position_control_msg.header.stamp = ros::Time::now();
   pose_pub.publish(position_control_msg);
   ros::Duration(1.0).sleep();
-  start_planner();
+  ros::spinOnce();
+  //start_planner();
 }
 
 void publish_pose() {
@@ -360,6 +327,18 @@ int main(int argc, char **argv) {
   exploration_state.status.status = nbv_msgs::Status::STATUS_WAIT;
 
   std::thread pose_t(publish_pose);
-  std::thread manager_t(private_manager);
-  ros::spin();
+  std::thread t2(&nbveplanner::History::historyMaintenance,
+                 planner->hist_.get());
+  /*std::thread manager_t(private_manager);
+  ros::spin();*/
+
+  ros::Rate rate(1);
+  while(request_state.status != nbv_msgs::Status::STATUS_RUN) {
+    rate.sleep();
+  }
+  exploration_state.status.status = nbv_msgs::Status::STATUS_RUN;
+  initializationMotion();
+  start_planner();
+  pose_t.join();
+  t2.join();
 }
