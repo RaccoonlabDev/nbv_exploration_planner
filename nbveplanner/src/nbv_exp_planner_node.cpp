@@ -13,6 +13,7 @@
 #include <tf/tf.h>
 #include <chrono>
 #include <thread>
+#include <functional>
 
 bool access_local_pos = false;
 bool stopped;
@@ -57,7 +58,7 @@ void send_path(std::vector<geometry_msgs::Pose> &path) {
     position_control_msg = aux_msg;
     loop_rate.sleep();
   }
-  ros::Duration(1.0).sleep();
+  ros::Duration(1.5).sleep();
 }
 
 bool stop_planner() {
@@ -323,10 +324,5 @@ int main(int argc, char **argv) {
 
   std::thread pose_t(publish_pose);
   std::thread manager_t(private_manager);
-  pose_t.detach();
-  manager_t.detach();
-
-  ros::AsyncSpinner spinner(0);
-  spinner.start();
-  ros::waitForShutdown();
+  ros::spin();
 }

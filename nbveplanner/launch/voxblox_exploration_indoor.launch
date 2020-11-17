@@ -19,10 +19,10 @@
     <arg name="shift_initial_z" default="-0.25"/>
     <arg name="namespace_voxblox" default="lowres/"/>
     <arg name="method" default="fast"/>
-    <arg name="voxel_size" default="0.1" />
+    <arg name="voxel_size" default="0.05" />
     <arg name="lowres_voxel_size" default="0.2"/>
     <arg name="position_controller" default="/goal"/>
-    <arg name="color_mode" default="normals"/>
+    <arg name="color_mode" default="color"/>
 
     <group ns="$(arg mav_name)">
         <node name="nbvePlanner" pkg="nbveplanner" type="nbvePlanner" output="screen" args="-alsologtostderr --v=-1">

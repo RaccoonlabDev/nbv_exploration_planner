@@ -201,7 +201,7 @@ void History::historyMaintenance() {
       if (graph.size() > 1 and not refineVertexPosition(tmp) and
           (tmp->potential_gain > params_->zero_frontier_voxels_ or
            tmp->potential_gain == -1)) {
-        //recalculatePotential(tmp);
+        recalculatePotential(tmp);
       }
       kd_res_next(nearest_set);
     }
