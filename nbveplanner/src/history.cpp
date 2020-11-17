@@ -3,7 +3,7 @@
 namespace nbveplanner {
 
 History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+                 HighResManager  *manager, LowResManager *manager_lowres,
                  Params *params)
     : nh_(nh),
       nh_private_(nh_private),

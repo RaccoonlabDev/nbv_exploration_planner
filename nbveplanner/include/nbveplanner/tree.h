@@ -47,7 +47,7 @@ class TreeBase {
   VoxbloxManager *manager_lowres_;
 
  public:
-  TreeBase(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+  TreeBase(HighResManager *manager, LowResManager *manager_lowres,
            Params *params);
 
   ~TreeBase();

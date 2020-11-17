@@ -43,8 +43,8 @@ class nbvePlanner {
   ros::Subscriber pointcloud_sub_;
 
   // Map Manager
-  std::unique_ptr<VoxbloxManager> manager_;
-  std::unique_ptr<VoxbloxManager> manager_lowres_;
+  std::unique_ptr<HighResManager> manager_;
+  std::unique_ptr<LowResManager> manager_lowres_;
   std::unique_ptr<RrtTree> tree_;
 
   bool exploration_complete_;
