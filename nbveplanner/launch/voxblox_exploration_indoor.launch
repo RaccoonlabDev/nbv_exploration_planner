@@ -20,7 +20,7 @@
     <arg name="namespace_voxblox" default="lowres/"/>
     <arg name="method" default="fast"/>
     <arg name="voxel_size" default="0.05" />
-    <arg name="lowres_voxel_size" default="0.2"/>
+    <arg name="lowres_voxel_size" default="0.3"/>
     <arg name="position_controller" default="/goal"/>
     <arg name="color_mode" default="color"/>
 

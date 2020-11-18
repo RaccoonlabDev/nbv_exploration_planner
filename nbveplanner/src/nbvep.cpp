@@ -18,10 +18,9 @@ nbvePlanner::nbvePlanner(const ros::NodeHandle &nh,
 
   nh_private_.param<std::string>("namespace_lowres_map", ns_map_, "lowres/");
 
-  manager_ =
-      std::make_unique<VoxbloxManager>(nh, nh_private, params_.get(), "");
+  manager_ = std::make_unique<HighResManager>(nh, nh_private, params_.get());
   manager_lowres_ =
-      std::make_unique<VoxbloxManager>(nh, nh_private, params_.get(), ns_map_);
+      std::make_unique<LowResManager>(nh, nh_private, params_.get(), ns_map_);
   hist_ = std::make_unique<History>(nh, nh_private, manager_.get(),
                                     manager_lowres_.get(), params_.get());
   tree_ = std::make_unique<RrtTree>(manager_.get(), manager_lowres_.get(),

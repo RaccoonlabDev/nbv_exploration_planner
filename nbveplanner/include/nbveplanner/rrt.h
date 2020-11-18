@@ -26,8 +26,8 @@ namespace nbveplanner {
 
 class RrtTree : public TreeBase {
  public:
-  RrtTree(VoxbloxManager *manager,
-          VoxbloxManager *manager_lowres,
+  RrtTree(HighResManager *manager,
+          LowResManager *manager_lowres,
           Params *params);
 
   ~RrtTree();

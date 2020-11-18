@@ -3,7 +3,7 @@
 namespace nbveplanner {
 
 History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+                 HighResManager  *manager, LowResManager *manager_lowres,
                  Params *params)
     : nh_(nh),
       nh_private_(nh_private),
@@ -114,7 +114,7 @@ double History::bfs(const Eigen::Vector3d &point) {
       Point{0.0, 0.0, voxel_size}, Point{0.0, 0.0, -voxel_size}};
   int frontierVoxels = 0;
   double distance;
-  VoxbloxManager::VoxelStatus status;
+  VoxelStatus status;
   while (not queue.empty()) {
     new_pos = queue.front();
     queue.pop();
@@ -124,12 +124,10 @@ double History::bfs(const Eigen::Vector3d &point) {
           (candidate - point).norm() <= 6.0 and
           isInsideBounds(params_->bbx_min_, params_->bbx_max_, candidate)) {
         status = manager_lowres_->getVoxelStatus(candidate);
-        if (status == VoxbloxManager::VoxelStatus::kFree /*and
-            manager_lowres_->getDistanceAtPosition(candidate, &distance) and
-            distance > params_->robot_radius_*/) {
+        if (status == VoxelStatus::kFree) {
           visited.insert(convertToString(candidate));
           queue.emplace(candidate);
-        } else if (status == VoxbloxManager::VoxelStatus::kUnknown) {
+        } else if (status == VoxelStatus::kUnknown) {
           ++frontierVoxels;
         }
       }
