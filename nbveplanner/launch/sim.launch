@@ -38,7 +38,7 @@
         <!-- vehicle model and world -->
         <arg name="est" default="ekf2"/>
         <arg name="vehicle" default="inno_drone"/>
-        <!--arg name="world" default="$(find nbveplanner)/worlds/compact_city.world"/-->
+        <!--arg name="world" default="$(find nbveplanner)/worlds/test_city.world"/-->
         <arg name="world" default="$(find drone_sim)/worlds/track1.world"/>
         <arg name="sdf" default="$(find drone_sim)/models/$(arg vehicle)/$(arg vehicle).sdf"/>
         <env name="PX4_SIM_MODEL" value="iris_opt_flow" />

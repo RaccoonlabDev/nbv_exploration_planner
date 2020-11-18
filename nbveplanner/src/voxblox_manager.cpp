@@ -11,7 +11,7 @@ VoxbloxManager::VoxbloxManager(const ros::NodeHandle &nh,
                                Params *params)
     : nh_(nh), nh_private_(nh_private), params_(CHECK_NOTNULL(params)) {}
 
-VoxelStatus VoxbloxManager::getVoxelStatus(
+VoxelStatus VoxbloxManager::getVoxelStatusByIndex(
     const voxblox::BlockIndex &block_idx,
     const voxblox::VoxelIndex &voxel_idx) const {
   const voxblox::Block<voxblox::TsdfVoxel>::Ptr block_ptr =
@@ -70,6 +70,25 @@ LowResManager::LowResManager(const ros::NodeHandle &nh,
   voxel_size_ = tsdf_layer_->voxel_size();
 }
 
+VoxelStatus LowResManager::getVoxelStatus(const Point &position) const {
+  const voxblox::Block<voxblox::TsdfVoxel>::Ptr block_ptr =
+      tsdf_layer_->getBlockPtrByCoordinates(position.cast<voxblox::FloatingPoint>());
+  if (block_ptr) {
+    // If this block exists, get the voxel.
+    const voxblox::TsdfVoxel &voxel =
+        block_ptr->getVoxelByCoordinates(position.cast<voxblox::FloatingPoint>());
+    if (voxel.weight <= 1e-1) {
+      return VoxelStatus::kUnknown;
+    } else if (voxel.distance <= 0.0) {
+      return VoxelStatus::kOccupied;
+    } else {
+      return VoxelStatus::kFree;
+    }
+  } else {
+    return VoxelStatus::kUnknown;
+  }
+}
+
 void LowResManager::clear() {
   tsdf_server_.clear();
   tsdf_layer_ = tsdf_server_.getTsdfMapPtr()->getTsdfLayerPtr();
@@ -107,27 +126,6 @@ bool HighResManager::checkCollisionWithRobotAtVoxel(
     return true;
   }
   return params_->robot_radius_ >= voxel->distance;
-}
-
-template <typename Type>
-bool HighResManager::checkMotion(const StateVec &start_, const StateVec &end_) {
-  Point start = {start_.x(), start_.y(), start_.z()};
-  Point end = {end_.x(), end_.y(), end_.z()};
-  voxblox::Point start_scaled, end_scaled;
-  voxblox::AlignedVector<voxblox::GlobalIndex> indices;
-
-  start_scaled =
-      start.cast<voxblox::FloatingPoint>() / tsdf_layer_->voxel_size();
-  end_scaled = end.cast<voxblox::FloatingPoint>() / tsdf_layer_->voxel_size();
-
-  voxblox::castRay(start_scaled, end_scaled, &indices);
-  for (const auto &global_index : indices) {
-    bool collision = checkCollisionWithRobotAtVoxel(global_index);
-    if (collision) {
-      return false;
-    }
-  }
-  return true;
 }
 
 double HighResManager::getDistanceAtPosition(const Point &pos) {

@@ -6,7 +6,7 @@
 
 namespace nbveplanner {
 
-RrtTree::RrtTree(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+RrtTree::RrtTree(HighResManager *manager, LowResManager *manager_lowres,
                  Params *params)
     : TreeBase(manager, manager_lowres, params) {
   g_ID_ = 0;
@@ -165,8 +165,8 @@ void RrtTree::iterate() {
   Pose newState;
 
   Node *newParent;
-  Eigen::Vector3d origin;
-  Eigen::Vector3d direction;
+  Point origin;
+  Point direction;
   bool solutionFound = false;
 
   std::mt19937 generator(
@@ -197,27 +197,24 @@ void RrtTree::iterate() {
     kd_res_free(nearest);
 
     // Check for collision of new connection plus some overshoot distance.
-    origin = Eigen::Vector3d(newParent->state_[0], newParent->state_[1],
-                             newParent->state_[2]);
-    direction =
-        Eigen::Vector3d(newState[0] - origin[0], newState[1] - origin[1],
-                        newState[2] - origin[2]);
+    origin =
+        Point(newParent->state_[0], newParent->state_[1], newParent->state_[2]);
+    direction = Point(newState[0] - origin[0], newState[1] - origin[1],
+                      newState[2] - origin[2]);
     if (direction.norm() > params_->extension_range_) {
       direction = params_->extension_range_ * direction.normalized();
     }
     newState[0] = origin[0] + direction[0];
     newState[1] = origin[1] + direction[1];
     newState[2] = origin[2] + direction[2];
-
-    if (manager_->checkMotion(
+    if (manager_->checkMotion<Point>(
             origin, direction + origin +
                         direction.normalized() * params_->dist_overshoot_)) {
       // Create new node and insert into tree
       double num_unmapped;
       if (params_->camera_model_.hasHorizontalLimit()) {
         num_unmapped = optimized_gain(newState);
-      }
-      else {
+      } else {
         num_unmapped = gain(newState);
       }
       auto *newNode = new Node;
@@ -340,7 +337,7 @@ void RrtTree::getBestBranch(std::vector<geometry_msgs::Pose> &path,
   std::vector<Node *> pathNodes;
   pathNodes.emplace_back(bestNode_);
   while (current->parent_ != nullptr) {
-    if (not manager_->checkMotion(pathNodes.back()->state_,
+    if (not manager_->checkMotion<Pose>(pathNodes.back()->state_,
                                   current->parent_->state_)) {
       pathNodes.emplace_back(current);
     }
@@ -434,11 +431,11 @@ double RrtTree::optimized_gain(Pose &state) {
         Point recovered_pos = global_index_ray.cast<double>() * voxel_size;
         if (not voxel_checked and
             params_->camera_model_.isPointInView(recovered_pos)) {
-          VoxbloxManager::VoxelStatus status =
-              manager_lowres_->getVoxelStatus(block_index_ray, voxel_index_ray);
-          if (status == VoxbloxManager::kUnknown) {
+          VoxelStatus status =
+              manager_lowres_->getVoxelStatusByIndex(block_index_ray, voxel_index_ray);
+          if (status == kUnknown) {
             gain += params_->gain_unmapped_;
-          } else if (status == VoxbloxManager::kOccupied) {
+          } else if (status == kOccupied) {
             gain += params_->gain_occupied_;
             break;
           } else {
@@ -549,7 +546,7 @@ double RrtTree::gain(Pose &state) {
       voxblox::VoxelIndex voxel_index_ray;
 
       for (const voxblox::GlobalIndex &global_index_ray :
-          global_voxel_indices) {
+           global_voxel_indices) {
         block_index_ray = voxblox::getBlockIndexFromGlobalVoxelIndex(
             global_index_ray, voxels_per_side_inv);
         voxel_index_ray = voxblox::getLocalFromGlobalVoxelIndex(
@@ -563,11 +560,11 @@ double RrtTree::gain(Pose &state) {
         Point recovered_pos = global_index_ray.cast<double>() * voxel_size;
         if (not voxel_checked and
             params_->camera_model_.isPointInView(recovered_pos)) {
-          VoxbloxManager::VoxelStatus status =
-              manager_lowres_->getVoxelStatus(block_index_ray, voxel_index_ray);
-          if (status == VoxbloxManager::kUnknown) {
+          VoxelStatus status =
+              manager_lowres_->getVoxelStatusByIndex(block_index_ray, voxel_index_ray);
+          if (status == kUnknown) {
             gain += params_->gain_unmapped_;
-          } else if (status == VoxbloxManager::kOccupied) {
+          } else if (status == kOccupied) {
             gain += params_->gain_occupied_;
             break;
           } else {

@@ -27,8 +27,10 @@ class VoxbloxManager {
   VoxelStatus getVisibility(const Point &view_point, const Point &voxel_to_test,
                             bool stop_at_unknown_voxel) const;
 
-  VoxelStatus getVoxelStatus(const voxblox::BlockIndex &block_idx,
-                             const voxblox::VoxelIndex &voxel_idx) const;
+  VoxelStatus getVoxelStatusByIndex(const voxblox::BlockIndex &block_idx,
+                                    const voxblox::VoxelIndex &voxel_idx) const;
+
+  virtual VoxelStatus getVoxelStatus(const Point &position) const = 0;
 
   double getResolution() const { return tsdf_layer_->voxel_size(); }
 
@@ -59,8 +61,12 @@ class VoxbloxManager {
 
 class LowResManager : public VoxbloxManager {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   LowResManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
                 Params *params, const std::string &ns);
+
+  VoxelStatus getVoxelStatus(const Point &position) const override;
 
   void clear() override;
 
@@ -70,16 +76,36 @@ class LowResManager : public VoxbloxManager {
 
 class HighResManager : public VoxbloxManager {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   HighResManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
                  Params *params);
 
-  VoxelStatus getVoxelStatus(const Point &position) const;
+  VoxelStatus getVoxelStatus(const Point &position) const override;
 
   bool checkCollisionWithRobotAtVoxel(
       const voxblox::GlobalIndex &global_index) const;
 
-  template <typename Type>
-  bool checkMotion(const Type &start_, const Type &end_);
+  template <typename T>
+  bool checkMotion(const T &start_, const T &end_) {
+    Point start = {start_.x(), start_.y(), start_.z()};
+    Point end = {end_.x(), end_.y(), end_.z()};
+    voxblox::Point start_scaled, end_scaled;
+    voxblox::AlignedVector<voxblox::GlobalIndex> indices;
+
+    start_scaled =
+        start.cast<voxblox::FloatingPoint>() / tsdf_layer_->voxel_size();
+    end_scaled = end.cast<voxblox::FloatingPoint>() / tsdf_layer_->voxel_size();
+
+    voxblox::castRay(start_scaled, end_scaled, &indices);
+    for (const auto &global_index : indices) {
+      bool collision = checkCollisionWithRobotAtVoxel(global_index);
+      if (collision) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   double getDistanceAtPosition(const Point &pos);
 
