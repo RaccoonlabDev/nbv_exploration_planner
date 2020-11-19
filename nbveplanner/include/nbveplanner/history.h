@@ -51,7 +51,7 @@ struct AStarNode {
 class History {
  public:
   History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-          VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+          HighResManager *manager, LowResManager *manager_lowres,
           Params *params);
 
   ~History();
@@ -158,8 +158,8 @@ class History {
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
-  VoxbloxManager *manager_;
-  VoxbloxManager *manager_lowres_;
+  HighResManager *manager_;
+  LowResManager *manager_lowres_;
   Params *params_;
   kdtree *kdTree_;
 

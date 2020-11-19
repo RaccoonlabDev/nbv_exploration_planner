@@ -15,52 +15,32 @@
 
 namespace nbveplanner {
 
+enum VoxelStatus { kUnknown, kOccupied, kFree };
+
 class VoxbloxManager {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  enum VoxelStatus { kUnknown, kOccupied, kFree };
-
   VoxbloxManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 Params *params, const std::string &ns);
+                 Params *params);
 
   VoxelStatus getVisibility(const Point &view_point, const Point &voxel_to_test,
                             bool stop_at_unknown_voxel) const;
 
-  VoxelStatus getVoxelStatus(const voxblox::BlockIndex &block_idx,
-                             const voxblox::VoxelIndex &voxel_idx) const;
+  VoxelStatus getVoxelStatusByIndex(const voxblox::BlockIndex &block_idx,
+                                    const voxblox::VoxelIndex &voxel_idx) const;
 
-  VoxelStatus getVoxelStatus(const Point &position) const;
-
-  bool checkCollisionWithRobotAtVoxel(const voxblox::GlobalIndex &global_index,
-                                      bool is_unknown_collision) const;
-
-  bool checkMotion(const Point &start, const Point &end,
-                   bool is_unknown_collision);
-
-  bool checkMotion(const Pose &start4d, const Pose &end4d,
-                   bool is_unknown_collision);
+  virtual VoxelStatus getVoxelStatus(const Point &position) const = 0;
 
   double getResolution() const { return tsdf_layer_->voxel_size(); }
 
   int getVoxelsPerSide() const { return tsdf_layer_->voxels_per_side(); }
 
+  virtual void clear() = 0;
+
   bool isTsdfEmpty() const {
     return tsdf_layer_->getNumberOfAllocatedBlocks() == 0;
   }
-
-  bool isEsdfEmpty() const {
-    return esdf_layer_->getNumberOfAllocatedBlocks() == 0;
-  }
-
-  double getDistanceAtPosition(const Point &pos);
-
-  bool getDistanceAtPosition(const Point &pos, double *distance);
-
-  bool getDistanceAndGradientAtPosition(const Point &pos, double *distance,
-                                        Point *grad);
-
-  void clear();
 
   double getNumberMappedVoxels() {
     static const double voxels_per_side = tsdf_layer_->voxels_per_side();
@@ -70,18 +50,81 @@ class VoxbloxManager {
     return tsdf_layer_->getNumberOfAllocatedBlocks() * volume_per_block;
   }
 
- private:
+ protected:
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
 
   Params *params_;
-  voxblox::EsdfServer esdf_server_;
-
-  // Cached:
   voxblox::Layer<voxblox::TsdfVoxel> *tsdf_layer_;
-  voxblox::Layer<voxblox::EsdfVoxel> *esdf_layer_;
-
   double voxel_size_;
+};
+
+class LowResManager : public VoxbloxManager {
+ public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  LowResManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
+                Params *params, const std::string &ns);
+
+  VoxelStatus getVoxelStatus(const Point &position) const override;
+
+  void clear() override;
+
+ private:
+  voxblox::TsdfServer tsdf_server_;
+};
+
+class HighResManager : public VoxbloxManager {
+ public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  HighResManager(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
+                 Params *params);
+
+  VoxelStatus getVoxelStatus(const Point &position) const override;
+
+  bool checkCollisionWithRobotAtVoxel(const voxblox::GlobalIndex &global_index,
+                                      bool is_unknown_collision) const;
+
+  template <typename T>
+  bool checkMotion(const T &start_, const T &end_, bool is_unknown_collision) {
+    Point start = {start_.x(), start_.y(), start_.z()};
+    Point end = {end_.x(), end_.y(), end_.z()};
+
+    voxblox::Point start_scaled, end_scaled;
+    voxblox::AlignedVector<voxblox::GlobalIndex> indices;
+
+    start_scaled =
+        start.cast<voxblox::FloatingPoint>() / tsdf_layer_->voxel_size();
+    end_scaled = end.cast<voxblox::FloatingPoint>() / tsdf_layer_->voxel_size();
+
+    voxblox::castRay(start_scaled, end_scaled, &indices);
+    for (const auto &global_index : indices) {
+      bool collision =
+          checkCollisionWithRobotAtVoxel(global_index, is_unknown_collision);
+      if (collision) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  double getDistanceAtPosition(const Point &pos);
+
+  bool getDistanceAtPosition(const Point &pos, double *distance);
+
+  bool getDistanceAndGradientAtPosition(const Point &pos, double *distance,
+                                        Point *grad);
+
+  bool isEsdfEmpty() const {
+    return esdf_layer_->getNumberOfAllocatedBlocks() == 0;
+  }
+
+  void clear() override;
+
+ private:
+  voxblox::EsdfServer esdf_server_;
+  voxblox::Layer<voxblox::EsdfVoxel> *esdf_layer_;
 };
 
 }  // namespace nbveplanner

@@ -13,6 +13,7 @@
 #include <tf/tf.h>
 #include <chrono>
 #include <thread>
+#include <functional>
 
 bool access_local_pos = false;
 bool stopped;
@@ -20,6 +21,7 @@ double dt;
 double wp_z;
 double shift_initial_x, shift_initial_y, shift_initial_z;
 double speed_rotate;
+bool initial_motion;
 std::string frame_id;
 
 geometry_msgs::PoseStamped position_control_msg;
@@ -56,7 +58,7 @@ void send_path(std::vector<geometry_msgs::Pose> &path) {
     position_control_msg = aux_msg;
     loop_rate.sleep();
   }
-  ros::Duration(2.0).sleep();
+  ros::Duration(1.5).sleep();
 }
 
 bool stop_planner() {
@@ -120,79 +122,49 @@ void initializationMotion() {
 
   while (not planner->isReady()) {
     ROS_INFO("Waiting initialization Local position");
-    ros::Duration(1.0).sleep();
+    ros::Duration(0.1).sleep();
   }
 
   position_control_msg.header.frame_id = frame_id;
   position_control_msg.pose.position.x = planner->local_position_.position.x;
   position_control_msg.pose.position.y = planner->local_position_.position.y;
   position_control_msg.pose.position.z = wp_z;
-  /*
-    mavros_msgs::SetMode offb_set_mode;
-    offb_set_mode.request.custom_mode = "OFFBOARD";
 
-    mavros_msgs::CommandBool arm_cmd;
-    arm_cmd.request.value = true;
-
-    ros::Time last_request = ros::Time::now();
-
-    while (current_state.mode != "OFFBOARD" or !current_state.armed) {
-      if( current_state.mode != "OFFBOARD" &&
-          (ros::Time::now() - last_request > ros::Duration(1.0))){
-        if( set_mode_client.call(offb_set_mode) &&
-            offb_set_mode.response.mode_sent){
-          ROS_INFO("Offboard enabled");
-        }
-        last_request = ros::Time::now();
-      } else {
-        if( !current_state.armed &&
-            (ros::Time::now() - last_request > ros::Duration(1.0))){
-          if( arming_client.call(arm_cmd) &&
-              arm_cmd.response.success){
-            ROS_INFO("Vehicle armed");
-          }
-          last_request = ros::Time::now();
-        }
-      }
-      position_control_msg.header.stamp = ros::Time::now();
-      //pose_pub.publish(position_control_msg);
-
-      ros::spinOnce();
-      ros::Duration(dt).sleep();
-    }
-
-    for (int i = 0; i < 100; ++i) {
-      position_control_msg.header.stamp = ros::Time::now();
-      pose_pub.publish(position_control_msg);
-      ros::Duration(dt).sleep();
-    }
-  */
   // This is the initialization motion, necessary to known free space that
   // allows the planning of initial paths.
+  if (initial_motion) {
+    ROS_INFO("Starting the planner: Performing initialization motion");
 
-  ROS_INFO("Starting the planner: Performing initialization motion");
+    double step = (2 * M_PI) / (dt * speed_rotate);
+    step = 2 * M_PI / step;
 
-  double step = (2 * M_PI) / (dt * speed_rotate);
-  step = 2 * M_PI / step;
+    ros::Rate loop_rate(1 / dt);
+    for (double i = 0.; i < 2 * M_PI; i += step) {
+      if (request_state.status != nbv_msgs::Status::STATUS_RUN and
+          request_state.status != nbv_msgs::Status::STATUS_WAIT) {
+        stopped = true;
+        return;
+      }
+      position_control_msg.header.frame_id = frame_id;
+      position_control_msg.header.stamp = ros::Time::now();
 
-  ros::Rate loop_rate(1 / dt);
-  for (double i = 0.; i < 2 * M_PI; i += step) {
-    if (request_state.status != nbv_msgs::Status::STATUS_RUN and
-        request_state.status != nbv_msgs::Status::STATUS_WAIT) {
-      stopped = true;
-      return;
+      tf::Quaternion q;
+      q.setRPY(0.0, 0.0, i);
+      geometry_msgs::Quaternion odom_quat;
+      tf::quaternionTFToMsg(q, odom_quat);
+      position_control_msg.pose.orientation = odom_quat;
+
+      pose_pub.publish(position_control_msg);
+      loop_rate.sleep();
     }
+  } else {
     position_control_msg.header.frame_id = frame_id;
     position_control_msg.header.stamp = ros::Time::now();
-
-    tf::Quaternion q;
-    q.setRPY(0.0, 0.0, i);
-    geometry_msgs::Quaternion odom_quat;
-    tf::quaternionTFToMsg(q, odom_quat);
-    position_control_msg.pose.orientation = odom_quat;
-
+    position_control_msg.pose.position = planner->local_position_.position;
+    position_control_msg.pose.orientation =
+        planner->local_position_.orientation;
     pose_pub.publish(position_control_msg);
-    loop_rate.sleep();
+    ros::Duration(1.0).sleep();
   }
   planner->initializeHistoryGraph(position_control_msg.pose.position);
   ROS_INFO("History graph initialized");
@@ -230,9 +202,9 @@ void private_manager() {
                          planner->hist_.get());
           t2.detach();
         } else if (exploration_state.status.status ==
-                       nbv_msgs::Status::STATUS_STOP or
+                   nbv_msgs::Status::STATUS_STOP or
                    exploration_state.status.status ==
-                       nbv_msgs::Status::STATUS_GO_HOME_COMPLETE) {
+                   nbv_msgs::Status::STATUS_GO_HOME_COMPLETE) {
           std::thread t3(start_planner);
           t3.detach();
         }
@@ -337,12 +309,14 @@ int main(int argc, char **argv) {
       nh.serviceClient<mavros_msgs::CommandBool>("/mavros/cmd/arming");
   set_mode_client = nh.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
 
-  const std::string &ns = ros::this_node::getName();
-  nh.param<double>(ns + "/wp_z", wp_z, 1.0);
-  nh.param<double>(ns + "/speed_rotate", speed_rotate, 0.5);
-  nh.param<double>(ns + "/shift_initial_x", shift_initial_x, 0.0);
-  nh.param<double>(ns + "/shift_initial_y", shift_initial_y, 0.0);
-  nh.param<double>(ns + "/shift_initial_z", shift_initial_z, 0.0);
+  nh_private.param<double>("wp_z", wp_z, 1.0);
+  nh_private.param<bool>("initial_motion", initial_motion, true);
+  if (initial_motion) {
+    nh_private.param<double>("speed_rotate", speed_rotate, 0.5);
+    nh_private.param<double>("shift_initial_x", shift_initial_x, 0.0);
+    nh_private.param<double>("shift_initial_y", shift_initial_y, 0.0);
+    nh_private.param<double>("shift_initial_z", shift_initial_z, 0.0);
+  }
   dt = planner->params_->dt_;
   frame_id = planner->params_->frame_id_;
 

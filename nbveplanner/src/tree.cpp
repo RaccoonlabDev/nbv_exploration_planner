@@ -18,7 +18,7 @@ Node::~Node() {
   }
 }
 
-TreeBase::TreeBase(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+TreeBase::TreeBase(HighResManager *manager, LowResManager *manager_lowres,
                    Params *params)
     : manager_(CHECK_NOTNULL(manager)),
       manager_lowres_(CHECK_NOTNULL(manager_lowres)),

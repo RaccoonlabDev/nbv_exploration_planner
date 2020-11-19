@@ -3,7 +3,7 @@
 namespace nbveplanner {
 
 History::History(const ros::NodeHandle &nh, const ros::NodeHandle &nh_private,
-                 VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+                 HighResManager *manager, LowResManager *manager_lowres,
                  Params *params)
     : nh_(nh),
       nh_private_(nh_private),
@@ -582,8 +582,7 @@ void History::addVertexAndConnect(const geometry_msgs::Point &point,
       line.points[1] = getPointFromEigen(nearest_vertex->pos);
       graph_edges_pub_.publish(line);
       ++edge_id_;
-    }
-    else {
+    } else {
       // Delete node from the graph because no collision-free connection was
       // possible
       graph.pop_back();

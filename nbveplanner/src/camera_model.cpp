@@ -29,11 +29,19 @@ void CameraModel::setIntrinsicsFromFoV(double horizontal_fov_deg,
   // Given this information, create 6 bounding planes, assuming the camera is
   // pointing with in the positive X direction.
   corners_C_.clear();
-  corners_C_.reserve(8);
 
-  double horizontal_fov = horizontal_fov_deg * M_PI / 180.0;
+  double horizontal_fov;
+
+  if (horizontal_fov_deg == 360.0) {
+    horizontal_limit_ = false;
+    corners_C_.reserve(32);
+    horizontal_fov = 90.0 * M_PI / 180.0;
+  } else {
+    corners_C_.reserve(8);
+    horizontal_fov = horizontal_fov_deg * M_PI / 180.0;
+  }
+
   double vertical_fov = vertical_fov_deg * M_PI / 180.0;
-
   double tan_half_hfov = std::tan(horizontal_fov / 2.0);
   double tan_half_vfov = std::tan(vertical_fov / 2.0);
 
@@ -64,6 +72,13 @@ void CameraModel::setIntrinsicsFromFoV(double horizontal_fov_deg,
   corners_C_.emplace_back(Point(max_distance, -max_distance * tan_half_hfov,
                                 max_distance * tan_half_vfov));
 
+  if (not horizontal_limit_) {
+    kindr::minimal::AngleAxisTemplate<double> R(M_PI_2,
+                                                Eigen::Vector3d::UnitZ());
+    for (size_t i = 0; i < 24; ++i) {
+      corners_C_.emplace_back(R.rotate(corners_C_[i]));
+    }
+  }
   initialized_ = true;
 }
 
@@ -85,9 +100,16 @@ void CameraModel::calculateBoundingPlanes() {
     return;
   }
 
-  CHECK_EQ(corners_C_.size(), 8u);
-  if (bounding_planes_.empty()) {
-    bounding_planes_.resize(6);
+  if (horizontal_limit_) {
+    CHECK_EQ(corners_C_.size(), 8u);
+    if (bounding_planes_.empty()) {
+      bounding_planes_.resize(6);
+    }
+  } else {
+    CHECK_EQ(corners_C_.size(), 32u);
+    if (bounding_planes_.empty()) {
+      bounding_planes_.resize(24);
+    }
   }
 
   AlignedVector<Point> corners_G;
@@ -98,41 +120,58 @@ void CameraModel::calculateBoundingPlanes() {
     corners_G[i] = T_G_C_ * corners_C_[i];
   }
 
-  // Near plane.
-  bounding_planes_[0].setFromPoints(corners_G[0], corners_G[2], corners_G[1]);
-  VLOG(5) << "Near plane: Normal: " << bounding_planes_[0].normal().transpose()
-          << " distance: " << bounding_planes_[0].distance();
-  // Far plane.
-  bounding_planes_[1].setFromPoints(corners_G[4], corners_G[5], corners_G[6]);
-  VLOG(5) << "Far plane: Normal: " << bounding_planes_[1].normal().transpose()
-          << " distance: " << bounding_planes_[1].distance();
+  for (size_t i = 0; i < (int)(bounding_planes_.size() / 6); ++i) {
+    // Near plane.
+    bounding_planes_[i * 6].setFromPoints(
+        corners_G[i * 8], corners_G[i * 8 + 2], corners_G[i * 8 + 1]);
+    VLOG(5) << "Near plane: Normal: "
+            << bounding_planes_[i * 8].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8].distance();
+    // Far plane.
+    bounding_planes_[i * 6 + 1].setFromPoints(
+        corners_G[i * 8 + 4], corners_G[i * 8 + 5], corners_G[i * 8 + 6]);
+    VLOG(5) << "Far plane: Normal: "
+            << bounding_planes_[i * 8 + 1].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 1].distance();
 
-  // Left.
-  bounding_planes_[2].setFromPoints(corners_G[3], corners_G[6], corners_G[2]);
-  VLOG(5) << "Left plane: Normal: " << bounding_planes_[2].normal().transpose()
-          << " distance: " << bounding_planes_[2].distance();
+    // Left.
+    bounding_planes_[i * 6 + 2].setFromPoints(
+        corners_G[i * 8 + 3], corners_G[i * 8 + 6], corners_G[i * 8 + 2]);
+    VLOG(5) << "Left plane: Normal: "
+            << bounding_planes_[i * 8 + 2].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 2].distance();
 
-  // Right.
-  bounding_planes_[3].setFromPoints(corners_G[0], corners_G[5], corners_G[4]);
-  VLOG(5) << "Right plane: Normal: " << bounding_planes_[3].normal().transpose()
-          << " distance: " << bounding_planes_[3].distance();
+    // Right.
+    bounding_planes_[i * 6 + 3].setFromPoints(
+        corners_G[i * 8], corners_G[i * 8 + 5], corners_G[i * 8 + 4]);
+    VLOG(5) << "Right plane: Normal: "
+            << bounding_planes_[i * 8 + 3].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 3].distance();
 
-  // Top.
-  bounding_planes_[4].setFromPoints(corners_G[3], corners_G[4], corners_G[7]);
-  VLOG(5) << "Top plane: Normal: " << bounding_planes_[4].normal().transpose()
-          << " distance: " << bounding_planes_[4].distance();
+    // Top.
+    bounding_planes_[i * 6 + 4].setFromPoints(
+        corners_G[i * 8 + 3], corners_G[i * 8 + 4], corners_G[i * 8 + 7]);
+    VLOG(5) << "Top plane: Normal: "
+            << bounding_planes_[i * 8 + 4].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 4].distance();
 
-  // Bottom.
-  bounding_planes_[5].setFromPoints(corners_G[2], corners_G[6], corners_G[5]);
-  VLOG(5) << "Bottom plane: Normal: "
-          << bounding_planes_[5].normal().transpose()
-          << " distance: " << bounding_planes_[5].distance();
+    // Bottom.
+    bounding_planes_[i * 6 + 5].setFromPoints(
+        corners_G[i * 8 + 2], corners_G[i * 8 + 6], corners_G[i * 8 + 5]);
+    VLOG(5) << "Bottom plane: Normal: "
+            << bounding_planes_[i * 8 + 5].normal().transpose()
+            << " distance: " << bounding_planes_[i * 8 + 5].distance();
+  }
 
+  if (not horizontal_limit_) {
+    aabb_min_.resize(4);
+    aabb_max_.resize(4);
+  }
   // Calculate AABB.
   aabb_min_.setConstant(std::numeric_limits<double>::max());
   aabb_max_.setConstant(std::numeric_limits<double>::lowest());
 
-  for (int i = 0; i < 3; i++) {
+  for (size_t i = 0; i < 3; i++) {
     for (auto &j : corners_G) {
       aabb_min_(i) = std::min(aabb_min_(i), j(i));
       aabb_max_(i) = std::max(aabb_max_(i), j(i));
@@ -153,12 +192,29 @@ bool CameraModel::isPointInView(const Point &point) const {
   if (not isInsideBounds(bbx_min_, bbx_max_, point)) {
     return false;
   }
-  for (const auto &bounding_plane : bounding_planes_) {
-    if (!bounding_plane.isPointCorrectSide(point)) {
+  if (horizontal_limit_) {
+    for (const auto &bounding_plane : bounding_planes_) {
+      if (!bounding_plane.isPointCorrectSide(point)) {
+        return false;
+      }
+    }
+    return true;
+  } else {
+    for (size_t sector = 0; sector < 4; ++sector) {
+      if (isPointInSector(sector * 6, point)) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+bool CameraModel::isPointInSector(size_t sector_idx, const Point &point) const {
+  for (size_t i = sector_idx; i < sector_idx + 6; ++i) {
+    if (!bounding_planes_[i].isPointCorrectSide(point)) {
       return false;
     }
   }
-  return true;
 }
 
 void CameraModel::getBoundingLines(AlignedVector<Point> *lines) const {
@@ -221,14 +277,15 @@ void CameraModel::getBoundingLines(AlignedVector<Point> *lines) const {
           << bounding_planes_[0].isPointCorrectSide(Point(-1, 0, 0));
 }
 
-void CameraModel::getFarPlanePoints(AlignedVector<Point> *points) const {
+void CameraModel::getFarPlanePoints(size_t sector_idx,
+                                    AlignedVector<Point> *points) const {
   CHECK_NOTNULL(points);
   points->clear();
   points->reserve(3);
 
-  points->emplace_back(T_G_C_ * corners_C_[4]);
-  points->emplace_back(T_G_C_ * corners_C_[5]);
-  points->emplace_back(T_G_C_ * corners_C_[6]);
+  points->emplace_back(T_G_C_ * corners_C_[sector_idx + 4]);
+  points->emplace_back(T_G_C_ * corners_C_[sector_idx + 5]);
+  points->emplace_back(T_G_C_ * corners_C_[sector_idx + 6]);
 }
 
 void CameraModel::setBoundingBox(Point &bbx_min, Point &bbx_max) {

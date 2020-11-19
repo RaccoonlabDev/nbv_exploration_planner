@@ -43,11 +43,11 @@ class TreeBase {
   Pose exact_root_;
 
   Params *params_;
-  VoxbloxManager *manager_;
-  VoxbloxManager *manager_lowres_;
+  HighResManager *manager_;
+  LowResManager *manager_lowres_;
 
  public:
-  TreeBase(VoxbloxManager *manager, VoxbloxManager *manager_lowres,
+  TreeBase(HighResManager *manager, LowResManager *manager_lowres,
            Params *params);
 
   ~TreeBase();

@@ -33,7 +33,7 @@ class CameraModel {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  CameraModel() : initialized_(false) {}
+  CameraModel() : initialized_(false), horizontal_limit_(true) {}
   virtual ~CameraModel() = default;
 
   /// Set up the camera model, intrinsics and extrinsics.
@@ -54,6 +54,8 @@ class CameraModel {
   /// Check whether a point belongs in the current view.
   bool isPointInView(const Point& point) const;
 
+  bool isPointInSector(size_t sector_idx, const Point& point) const;
+
   void getAabb(Point* aabb_min, Point* aabb_max) const;
 
   /**
@@ -70,14 +72,17 @@ class CameraModel {
    * Get the 3 points definining the plane at the back (far end) of the camera
    * frustum. Expressed in global coordinates.
    */
-  void getFarPlanePoints(AlignedVector<Point>* points) const;
+  void getFarPlanePoints(size_t sector_idx, AlignedVector<Point>* points) const;
 
   void setBoundingBox(Point& bbx_min, Point& bbx_max);
+
+  bool hasHorizontalLimit() { return horizontal_limit_; }
 
  private:
   void calculateBoundingPlanes();
 
   bool initialized_;
+  bool horizontal_limit_;
 
   /// Current pose of the camera.
   Transformation T_G_C_;
