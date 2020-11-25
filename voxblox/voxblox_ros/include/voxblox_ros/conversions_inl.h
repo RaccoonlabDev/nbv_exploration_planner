@@ -1,17 +1,56 @@
 #ifndef VOXBLOX_ROS_CONVERSIONS_INL_H_
 #define VOXBLOX_ROS_CONVERSIONS_INL_H_
 
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <vector>
 
 namespace voxblox {
 
+typedef boost::dynamic_bitset<>::size_type size_type;
+
 template <typename VoxelType>
-void serializeFrontiersAsMsg(Layer<VoxelType>* layer, bool only_updated,
-                             visualization_msgs::MarkerArray* msg,
-                             bool clear_updated_flag) {
+void serializeFrontierVoxelsAsMsg(Layer<VoxelType>* layer, bool only_updated,
+                                  voxblox_msgs::FrontierVoxels* msg,
+                                  bool clear_updated_flag) {
   CHECK_NOTNULL(msg);
+  const size_type npos = boost::dynamic_bitset<>::npos;
+  msg->voxel_size = layer->voxel_size();
+  msg->voxels_per_side = layer->voxels_per_side();
+  BlockIndexList block_list;
+  if (only_updated) {
+    layer->getAllUpdatedBlocks(Update::kFrontier, &block_list);
+  } else {
+    layer->getAllAllocatedBlocks(&block_list);
+  }
+  voxblox_msgs::Voxel voxel;
+  Block<TsdfVoxel>::Ptr block;
+  GlobalIndex global_index;
+  for (const BlockIndex& index : block_list) {
+    block = layer->getBlockPtrByIndex(index);
+    size_type bit = block->updated_voxel().find_first();
+    while (bit != npos) {
+      global_index = getGlobalVoxelIndexFromBlockAndVoxelIndex(
+          index, block->computeVoxelIndexFromLinearIndex(bit),
+          msg->voxels_per_side);
+      voxel.x_index = global_index.x();
+      voxel.y_index = global_index.y();
+      voxel.z_index = global_index.z();
+      voxel.action = block->frontiers()[bit];
+      msg->voxels.emplace_back(voxel);
+      bit = block->updated_voxel().find_next(bit);
+    }
+    if (clear_updated_flag) {
+      block->updated_voxel().reset();
+      block->updated().reset(Update::kFrontier);
+    }
+  }
+}
+
+template <typename VoxelType>
+void serializeFrontiersAsMarkerMsg(Layer<VoxelType>* layer, bool only_updated,
+                                   visualization_msgs::MarkerArray* msg,
+                                   bool clear_updated_flag) {
+  CHECK_NOTNULL(msg);
+  const size_type npos = boost::dynamic_bitset<>::npos;
   BlockIndexList block_list;
   if (only_updated) {
     layer->getAllUpdatedBlocks(Update::kFrontier, &block_list);
@@ -34,7 +73,7 @@ void serializeFrontiersAsMsg(Layer<VoxelType>* layer, bool only_updated,
   marker_msg.scale.y = layer->voxel_size();
   marker_msg.scale.z = layer->voxel_size();
 
-  Block<TsdfVoxel>::ConstPtr block;
+  Block<TsdfVoxel>::Ptr block;
   for (const BlockIndex& index : block_list) {
     marker_msg.points.clear();
     if (layer->hasBlock(index)) {
@@ -46,14 +85,14 @@ void serializeFrontiersAsMsg(Layer<VoxelType>* layer, bool only_updated,
         marker_msg.points.reserve(block->frontiers().count());
         Point voxel_origin;
         geometry_msgs::Point point_msg;
-        for (size_t lin_idx = 0; lin_idx < block->num_voxels(); ++lin_idx) {
-          if (block->frontiers()[lin_idx]) {
-            voxel_origin = block->computeCoordinatesFromLinearIndex(lin_idx);
-            point_msg.x = voxel_origin.x();
-            point_msg.y = voxel_origin.y();
-            point_msg.z = voxel_origin.z();
-            marker_msg.points.emplace_back(point_msg);
-          }
+        size_type lin_idx = block->frontiers().find_first();
+        while (lin_idx != npos) {
+          voxel_origin = block->computeCoordinatesFromLinearIndex(lin_idx);
+          point_msg.x = voxel_origin.x();
+          point_msg.y = voxel_origin.y();
+          point_msg.z = voxel_origin.z();
+          marker_msg.points.emplace_back(point_msg);
+          lin_idx = block->frontiers().find_next(lin_idx);
         }
         marker_msg.action = visualization_msgs::Marker::ADD;
       }
@@ -64,7 +103,7 @@ void serializeFrontiersAsMsg(Layer<VoxelType>* layer, bool only_updated,
       msg->markers.emplace_back(marker_msg);
 
       if (clear_updated_flag) {
-        layer->getBlockByIndex(index).updated().reset(Update::kFrontier);
+        block->updated().reset(Update::kFrontier);
       }
     }
   }

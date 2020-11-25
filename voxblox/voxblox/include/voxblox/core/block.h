@@ -41,6 +41,7 @@ class Block {
     block_size_inv_ = 1.0 / block_size_;
     voxels_.reset(new VoxelType[num_voxels_]);
     frontiers_.resize(num_voxels_);
+    updated_voxel_.resize(num_voxels_);
     id_ = AnyIndexHash()(this->block_index());
   }
 
@@ -193,6 +194,12 @@ class Block {
 
   const std::size_t& id() const { return id_; }
 
+  const boost::dynamic_bitset<>& updated_voxel() const {
+    return updated_voxel_;
+  }
+
+  boost::dynamic_bitset<>& updated_voxel() { return updated_voxel_; }
+
   const boost::dynamic_bitset<>& frontiers() const { return frontiers_; }
 
   boost::dynamic_bitset<>& frontiers() { return frontiers_; }
@@ -222,6 +229,9 @@ class Block {
 
   /// Is set to true when data is updated.
   std::bitset<Update::kCount> updated_;
+
+  // Is set to true when the corresponding voxel received an update
+  boost::dynamic_bitset<> updated_voxel_;
 
   // Is set to true when the corresponding voxel is a frontier
   boost::dynamic_bitset<> frontiers_;

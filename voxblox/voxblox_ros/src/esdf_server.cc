@@ -51,8 +51,8 @@ void EsdfServer::setupRos() {
   esdf_map_pub_ = nh_private_.advertise<voxblox_msgs::Layer>(
       ns_ + "esdf_map_out", 1, false);
 
-  frontiers_pub_ = nh_private_.advertise<visualization_msgs::MarkerArray>(
-      ns_ + "frontiers", 1);
+  frontiers_pub_ = nh_private_.advertise<voxblox_msgs::FrontierVoxels>(
+      ns_ + "frontier_voxels", 1);
 
   // Set up subscriber.
   esdf_map_sub_ = nh_private_.subscribe(ns_ + "esdf_map_in", 1,
@@ -203,10 +203,13 @@ void EsdfServer::updateEsdf() {
 }
 
 void EsdfServer::publishUpdatedFrontiers() {
-  visualization_msgs::MarkerArray msg;
   const bool clear_updated_flag_esdf = true;
-  serializeFrontiersAsMsg<TsdfVoxel>(tsdf_map_->getTsdfLayerPtr(), true, &msg,
-                                     clear_updated_flag_esdf);
+  /*visualization_msgs::MarkerArray msg;
+  serializeFrontiersAsMarkerMsg<TsdfVoxel>(tsdf_map_->getTsdfLayerPtr(), true,
+                                           &msg, clear_updated_flag_esdf);*/
+  voxblox_msgs::FrontierVoxels msg;
+  serializeFrontierVoxelsAsMsg<TsdfVoxel>(tsdf_map_->getTsdfLayerPtr(), true,
+                                          &msg, clear_updated_flag_esdf);
   frontiers_pub_.publish(msg);
 }
 

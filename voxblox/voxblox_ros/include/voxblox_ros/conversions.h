@@ -13,8 +13,11 @@
 #include <voxblox/core/layer.h>
 #include <voxblox/mesh/mesh.h>
 #include <voxblox/utils/color_maps.h>
+#include <voxblox_msgs/FrontierVoxels.h>
 #include <voxblox_msgs/Layer.h>
+#include <voxblox_msgs/Voxel.h>
 
+#include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
 namespace voxblox {
@@ -147,9 +150,9 @@ inline void convertPointcloud(
 
 // Declarations
 template <typename VoxelType>
-void serializeFrontiersAsMsg(Layer<VoxelType>* layer, bool only_updated,
-                             visualization_msgs::MarkerArray* msg,
-                             bool clear_updated_flag);
+void serializeFrontiersAsMarkerMsg(Layer<VoxelType>* layer, bool only_updated,
+                                   visualization_msgs::MarkerArray* msg,
+                                   bool clear_updated_flag);
 
 template <typename VoxelType>
 void serializeLayerAsMsg(

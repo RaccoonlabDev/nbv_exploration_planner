@@ -123,24 +123,25 @@ void EsdfIntegrator::updateFromTsdfLayer(bool clear_updated_flag) {
 
 void EsdfIntegrator::updateFrontiers(const Block<TsdfVoxel>::Ptr& tsdf_block,
                                      size_t lin_index) {
-  static const AlignedVector<Point> adjacent{
-      Point{voxel_size_, 0., 0.}, Point{-voxel_size_, 0., 0.},
-      Point{0., voxel_size_, 0.}, Point{0., -voxel_size_, 0.},
-      Point{0., 0., voxel_size_}, Point{0., 0., -voxel_size_}};
+  static const GlobalIndexVector adjacent{
+      GlobalIndex{1, 0, 0},  GlobalIndex{-1, 0, 0}, GlobalIndex{0, 1, 0},
+      GlobalIndex{0, -1, 0}, GlobalIndex{0, 0, 1},  GlobalIndex{0, 0, -1}};
 
+  VoxelIndex voxel_index =
+      tsdf_block->computeVoxelIndexFromLinearIndex(lin_index);
+  GlobalIndex global_index = getGlobalVoxelIndexFromBlockAndVoxelIndex(
+      tsdf_block->block_index(), voxel_index, tsdf_layer_->voxels_per_side());
   TsdfVoxel current_voxel = tsdf_block->getVoxelByLinearIndex(lin_index);
-  Point voxel_coord = tsdf_block->computeCoordinatesFromLinearIndex(lin_index);
   // If the voxel is free look up if its a frontier, by checking the adjacent
   if (current_voxel.weight > 1e-1 and current_voxel.distance > 0) {
     bool is_frontier = false;
-    Point adj_coord;
+    GlobalIndex adj_global_idx;
     for (const auto& adj : adjacent) {
-      adj_coord = voxel_coord + adj;
-      Block<TsdfVoxel>::ConstPtr adj_block_ptr =
-          tsdf_layer_->getBlockPtrByCoordinates(adj_coord);
-      if (adj_block_ptr) {
-        TsdfVoxel adj_voxel = adj_block_ptr->getVoxelByCoordinates(adj_coord);
-        if (adj_voxel.weight <= 1e-1) {
+      adj_global_idx = global_index + adj;
+      TsdfVoxel* adj_voxel =
+          tsdf_layer_->getVoxelPtrByGlobalIndex(adj_global_idx);
+      if (adj_voxel != nullptr) {
+        if (adj_voxel->weight <= 1e-1) {
           is_frontier = true;
           break;
         }
@@ -153,11 +154,10 @@ void EsdfIntegrator::updateFrontiers(const Block<TsdfVoxel>::Ptr& tsdf_block,
     if (is_frontier != tsdf_block->frontiers()[lin_index]) {
       // Update the new value in the block
       tsdf_block->frontiers().set(lin_index, is_frontier);
-      //size_t frontiers_count = tsdf_block->frontiers().count();
-      //if (frontiers_count == 257 or  frontiers_count == 256) {
       // Mark it as updated
       tsdf_block->updated().set(Update::kFrontier, true);
-      //}
+      // Mark the updated voxel
+      tsdf_block->updated_voxel().set(lin_index, true);
     }
   }
 }

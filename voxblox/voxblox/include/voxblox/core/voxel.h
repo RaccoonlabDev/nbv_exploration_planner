@@ -13,10 +13,6 @@ struct TsdfVoxel {
   float distance = 0.0f;
   float weight = 0.0f;
   Color color;
-  /**
-   * Whether the voxel is a frontier voxel (true) or not (false).
-   */
-  bool frontier = false;
 };
 
 struct EsdfVoxel {

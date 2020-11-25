@@ -202,29 +202,6 @@ class Layer {
     }
   }
 
-  void getAllFrontierBlocks(BlockIndexList* blocks) const {
-    CHECK_NOTNULL(blocks);
-    blocks->clear();
-    for (const std::pair<const BlockIndex, typename BlockType::Ptr>& kv :
-         block_map_) {
-      if (kv.second->isFrontier()) {
-        blocks->emplace_back(kv.first);
-      }
-    }
-  }
-
-  void getAllUpdatedFrontierBlocks(Update::Status bit,
-                                   BlockIndexList* blocks) const {
-    CHECK_NOTNULL(blocks);
-    blocks->clear();
-    for (const std::pair<const BlockIndex, typename BlockType::Ptr>& kv :
-         block_map_) {
-      if (kv.second->updated()[bit] and kv.second->isFrontier()) {
-        blocks->emplace_back(kv.first);
-      }
-    }
-  }
-
   size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 
   bool hasBlock(const BlockIndex& block_index) const {

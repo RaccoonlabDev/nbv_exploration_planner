@@ -114,7 +114,7 @@ double History::bfs(const Eigen::Vector3d &point) {
       Point{0.0, 0.0, voxel_size}, Point{0.0, 0.0, -voxel_size}};
   int frontierVoxels = 0;
   double distance;
-  VoxbloxManager::VoxelStatus status;
+  VoxelStatus status;
   while (not queue.empty()) {
     new_pos = queue.front();
     queue.pop();
@@ -124,12 +124,12 @@ double History::bfs(const Eigen::Vector3d &point) {
           (candidate - point).norm() <= 6.0 and
           isInsideBounds(params_->bbx_min_, params_->bbx_max_, candidate)) {
         status = manager_lowres_->getVoxelStatus(candidate);
-        if (status == VoxbloxManager::VoxelStatus::kFree /*and
+        if (status == VoxelStatus::kFree /*and
             manager_lowres_->getDistanceAtPosition(candidate, &distance) and
             distance > params_->robot_radius_*/) {
           visited.insert(convertToString(candidate));
           queue.emplace(candidate);
-        } else if (status == VoxbloxManager::VoxelStatus::kUnknown) {
+        } else if (status == VoxelStatus::kUnknown) {
           ++frontierVoxels;
         }
       }
@@ -169,7 +169,6 @@ void History::reset() {
 
 void History::historyMaintenance() {
   while (not initialized_) {
-    ros::spinOnce();
     ros::Duration(0.1).sleep();
   }
   ROS_INFO("Start History Graph Maintenance");
@@ -209,7 +208,6 @@ void History::historyMaintenance() {
     }
     kd_res_free(nearest_set);
     ++iteration_;
-    ros::spinOnce();
   }
 }
 

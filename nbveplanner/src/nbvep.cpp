@@ -110,6 +110,7 @@ bool nbvePlanner::plannerCallback(
   // Clear old tree and reinitialize.
   tree_->clear();
   hist_->clear();
+  ros::spinOnce();
   tree_->initialize(false);
   tree_->setRootVicinity(params_->vicinity_range_);
 
