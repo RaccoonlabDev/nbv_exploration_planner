@@ -21,7 +21,7 @@ Frontier::Frontier()
   color_.a = 0.5;
 }
 
-bool Frontier::hasVoxel(const voxblox::GlobalIndex &global_index) {
+bool Frontier::hasVoxel(const voxblox::GlobalIndex &global_index) const {
   if (frontier_voxels_.find(global_index) != frontier_voxels_.end()) {
     return true;
   }
@@ -41,10 +41,8 @@ void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
   }
 }
 
-void Frontier::addVoxelVector(
-    voxblox::GlobalIndexVector::const_iterator it_begin,
-    voxblox::GlobalIndexVector::const_iterator it_end) {
-  frontier_voxels_.insert(it_begin, it_end);
+void Frontier::addFrontier(const voxblox::LongIndexSet& frontier_voxels) {
+  frontier_voxels_.insert(frontier_voxels.begin(), frontier_voxels.end());
 }
 
 // TODO: Check if cluster is still connected
@@ -61,6 +59,23 @@ void Frontier::removeVoxel(const voxblox::GlobalIndex &global_index) {
       }
     }
   }
+}
+
+bool Frontier::checkIntersectionAabb(const Frontier &frontier) const {
+  for (size_t i = 0; i < 3; ++i) {
+    if (aabb_min_[i] - 1 < frontier.aabb_min_[i] or
+        aabb_max_[i] + 1 > frontier.aabb_max_[i]) {
+      return false;
+    }
+  }
+  for (const auto &voxel : frontier_voxels_) {
+    for (const auto &adj : adjacent) {
+      if (frontier.hasVoxel(voxel + adj)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 }  // namespace frontiers

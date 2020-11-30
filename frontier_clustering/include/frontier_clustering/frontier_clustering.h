@@ -43,18 +43,17 @@ class FrontierClustering {
       voxblox::LongIndexHashMapType<size_t>::type* voxel_map,
       voxblox::GlobalIndexVector* remove_voxel);
 
-  void serializeFrontierClustersMsg(
-      const voxblox::LongIndexHashMapType<size_t>::type::iterator& it,
-      size_t cluster, visualization_msgs::Marker* m);
+  void serializeFrontierClustersMsg();
+
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
 
   double voxel_size_;
   double voxels_per_side_;
 
-  visualization_msgs::MarkerArray frontiers_marker_;
+  visualization_msgs::Marker frontiers_msg_;
 
-  ros::Publisher frontier_vis_pub_;
+  ros::Publisher frontiers_pub_;
 
   ros::Subscriber frontier_voxels_sub_;
 
