@@ -1,0 +1,4 @@
+<launch>
+    <node name="frontierClustering" pkg="frontier_clustering" type="frontierClustering" output="screen"
+          args="-alsologtostderr --v=5"/>
+</launch>

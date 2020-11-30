@@ -6,8 +6,8 @@
 #define SRC_FRONTIER_CLUSTERING_H
 
 #include <ros/ros.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 #include <voxblox_msgs/FrontierVoxels.h>
 #include <boost/dynamic_bitset.hpp>
 
@@ -31,19 +31,26 @@ class FrontierClustering {
   void removeOldFrontierVoxels(voxblox::GlobalIndexVector& remove_voxel);
 
   void clusterNewFrontiers(
-      voxblox::LongIndexHashMapType<int8_t>::type& voxel_map);
+      voxblox::LongIndexHashMapType<size_t>::type& voxel_map);
 
   void clusterNewFrontiersRec(
-      voxblox::LongIndexHashMapType<int8_t>::type& voxel_map,
-      int8_t cluster, voxblox::LongIndexHashMapType<int8_t>::type::iterator it);
+      voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
+      voxblox::AlignedVector<Frontier>& frontiers_tmp, size_t cluster,
+      voxblox::LongIndexHashMapType<size_t>::type::iterator it);
 
-  static void deserializeFrontierVoxelsMsg(
+  void deserializeFrontierVoxelsMsg(
       const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
-      voxblox::LongIndexHashMapType<int8_t>::type* voxel_map,
+      voxblox::LongIndexHashMapType<size_t>::type* voxel_map,
       voxblox::GlobalIndexVector* remove_voxel);
 
+  void serializeFrontierClustersMsg(
+      const voxblox::LongIndexHashMapType<size_t>::type::iterator& it,
+      size_t cluster, visualization_msgs::Marker* m);
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
+
+  double voxel_size_;
+  double voxels_per_side_;
 
   visualization_msgs::MarkerArray frontiers_marker_;
 

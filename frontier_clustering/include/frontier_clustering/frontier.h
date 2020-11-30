@@ -32,9 +32,14 @@ class Frontier {
 
   void removeVoxel(const voxblox::GlobalIndex& global_index);
 
+  const std_msgs::ColorRGBA& color() { return color_; }
+
  private:
   voxblox::LongIndexSet frontier_voxels_;
   std_msgs::ColorRGBA color_;
+
+  Eigen::Vector3i aabb_min_;
+  Eigen::Vector3i aabb_max_;
 };
 
 }  // namespace frontiers
