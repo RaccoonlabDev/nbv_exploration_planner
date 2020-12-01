@@ -51,6 +51,9 @@ class FrontierClustering {
   double voxel_size_;
   double voxels_per_side_;
 
+  voxblox::GlobalIndex aabb_min_;
+  voxblox::GlobalIndex aabb_max_;
+
   visualization_msgs::Marker frontiers_msg_;
 
   ros::Publisher frontiers_pub_;

@@ -12,6 +12,9 @@ void serializeFrontierVoxelsAsMsg(Layer<VoxelType>* layer, bool only_updated,
                                   voxblox_msgs::FrontierVoxels* msg,
                                   bool clear_updated_flag) {
   CHECK_NOTNULL(msg);
+  GlobalIndex aabb_min{INT64_MAX, INT64_MAX, INT64_MAX};
+  GlobalIndex aabb_max{INT64_MIN, INT64_MIN, INT64_MIN};
+
   const size_type npos = boost::dynamic_bitset<>::npos;
   msg->voxel_size = layer->voxel_size();
   msg->voxels_per_side = layer->voxels_per_side();
@@ -31,9 +34,17 @@ void serializeFrontierVoxelsAsMsg(Layer<VoxelType>* layer, bool only_updated,
       global_index = getGlobalVoxelIndexFromBlockAndVoxelIndex(
           index, block->computeVoxelIndexFromLinearIndex(bit),
           msg->voxels_per_side);
-      voxel.x_index = global_index.x();
-      voxel.y_index = global_index.y();
-      voxel.z_index = global_index.z();
+      for (size_t i = 0; i < 3; ++i) {
+        if (global_index[i] < aabb_min[i]) {
+          aabb_min[i] = global_index[i];
+        }
+        if (global_index[i] > aabb_max[i]) {
+          aabb_max[i] = global_index[i];
+        }
+      }
+      voxel.index.x = global_index.x();
+      voxel.index.y = global_index.y();
+      voxel.index.z = global_index.z();
       voxel.action = block->frontiers()[bit];
       msg->voxels.emplace_back(voxel);
       bit = block->updated_voxel().find_next(bit);

@@ -41,24 +41,24 @@ void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
   }
 }
 
-void Frontier::addFrontier(const voxblox::LongIndexSet& frontier_voxels) {
-  frontier_voxels_.insert(frontier_voxels.begin(), frontier_voxels.end());
+void Frontier::addFrontier(const voxblox::LongIndexSet &frontier_voxels) {
+  for (const auto & frontier_voxel : frontier_voxels) {
+    for (size_t i = 0; i < 3; ++i) {
+      if (frontier_voxel[i] < aabb_min_[i]) {
+        aabb_min_.x() = frontier_voxel[i];
+      }
+      if (frontier_voxel[i] > aabb_max_[i]) {
+        aabb_max_[i] = frontier_voxel[i];
+      }
+    }
+    frontier_voxels_.insert(frontier_voxel);
+  }
 }
 
 // TODO: Check if cluster is still connected
 void Frontier::removeVoxel(const voxblox::GlobalIndex &global_index) {
   frontier_voxels_.erase(global_index);
-
-  for (const auto &voxel : frontier_voxels_) {
-    for (size_t i = 0; i < 3; ++i) {
-      if (voxel[i] == aabb_min_[i]) {
-        aabb_min_[i] = voxel[i];
-      }
-      if (voxel[i] == aabb_max_[i]) {
-        aabb_max_[i] = voxel[i];
-      }
-    }
-  }
+  //TODO: Recalculate AABB
 }
 
 bool Frontier::checkIntersectionAabb(const Frontier &frontier) const {

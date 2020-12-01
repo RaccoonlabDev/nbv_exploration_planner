@@ -9,8 +9,7 @@ namespace frontiers {
 FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
                                        const ros::NodeHandle& nh_private)
     : nh_(nh), nh_private_(nh_private) {
-  frontiers_pub_ =
-      nh_.advertise<visualization_msgs::Marker>("frontiers", 1);
+  frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 1);
   frontier_voxels_sub_ =
       nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
                     &FrontierClustering::insertFrontierVoxels, this);
@@ -23,10 +22,10 @@ void FrontierClustering::insertFrontierVoxels(
   voxblox::LongIndexHashMapType<size_t>::type voxel_map;
   voxblox::GlobalIndexVector remove_voxel;
   deserializeFrontierVoxelsMsg(frontier_voxels, &voxel_map, &remove_voxel);
+  
   removeOldFrontierVoxels(remove_voxel);
   clusterNewFrontiers(voxel_map);
   serializeFrontierClustersMsg();
-  frontiers_pub_.publish(frontiers_msg_);
 }
 
 void FrontierClustering::removeOldFrontierVoxels(
@@ -80,9 +79,7 @@ void FrontierClustering::clusterNewFrontiersRec(
       frontiers_tmp.emplace_back(Frontier());
     }
     frontiers_tmp[cluster].addVoxel(it->first);
-    /*visualization_msgs::Marker m;
-    serializeFrontierClustersMsg(it, cluster, &m);
-    frontiers_marker_.markers.emplace_back(m);*/
+
     for (const auto& adj : adjacent) {
       clusterNewFrontiersRec(voxel_map, frontiers_tmp, cluster,
                              voxel_map.find(it->first + adj));
@@ -91,6 +88,8 @@ void FrontierClustering::clusterNewFrontiersRec(
 }
 
 void FrontierClustering::serializeFrontierClustersMsg() {
+  frontiers_msg_.action = visualization_msgs::Marker::DELETE;
+  frontiers_pub_.publish(frontiers_msg_);
   frontiers_msg_.header.frame_id = "map";
   frontiers_msg_.header.stamp = ros::Time::now();
   frontiers_msg_.ns = "frontiers";
@@ -104,9 +103,9 @@ void FrontierClustering::serializeFrontierClustersMsg() {
   frontiers_msg_.scale.x = voxel_size_;
   frontiers_msg_.scale.y = voxel_size_;
   frontiers_msg_.scale.z = voxel_size_;
-  geometry_msgs::Point p;
   frontiers_msg_.points.clear();
   frontiers_msg_.colors.clear();
+  geometry_msgs::Point p;
   for (const auto& frontier : frontiers_) {
     for (const auto& voxel : frontier.frontier_voxels()) {
       frontiers_msg_.colors.emplace_back(frontier.color());
@@ -119,6 +118,7 @@ void FrontierClustering::serializeFrontierClustersMsg() {
       frontiers_msg_.points.emplace_back(p);
     }
   }
+  frontiers_pub_.publish(frontiers_msg_);
 }
 
 void FrontierClustering::deserializeFrontierVoxelsMsg(
@@ -130,12 +130,14 @@ void FrontierClustering::deserializeFrontierVoxelsMsg(
   voxel_size_ = frontier_voxels->voxel_size;
   voxels_per_side_ = frontier_voxels->voxels_per_side;
 
-  const size_t size = frontier_voxels->voxels.size();
-  voxel_map->reserve(size);
-  remove_voxel->reserve(size);
+  aabb_min_ = {frontier_voxels->aabb_min.x, frontier_voxels->aabb_min.y,
+               frontier_voxels->aabb_min.z};
+  aabb_max_ = {frontier_voxels->aabb_max.x, frontier_voxels->aabb_max.y,
+               frontier_voxels->aabb_max.z};
+
   voxblox::GlobalIndex global_index;
   for (auto fvoxel : frontier_voxels->voxels) {
-    global_index = {fvoxel.x_index, fvoxel.y_index, fvoxel.z_index};
+    global_index = {fvoxel.index.x, fvoxel.index.y, fvoxel.index.z};
     if (fvoxel.action == 0) {
       remove_voxel->emplace_back(global_index);
     } else {
