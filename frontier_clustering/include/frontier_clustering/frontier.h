@@ -42,14 +42,16 @@ class Frontier {
 
   const std_msgs::ColorRGBA& color() const { return color_; }
 
+  void getAabb(voxblox::GlobalIndex* aabb_min, voxblox::GlobalIndex* aabb_max) const;
+
   bool checkIntersectionAabb(const Frontier& frontier) const;
 
  private:
   voxblox::LongIndexSet frontier_voxels_;
   std_msgs::ColorRGBA color_;
 
-  Eigen::Vector3i aabb_min_;
-  Eigen::Vector3i aabb_max_;
+  voxblox::GlobalIndex aabb_min_;
+  voxblox::GlobalIndex aabb_max_;
 };
 
 }  // namespace frontiers

@@ -22,19 +22,39 @@ void FrontierClustering::insertFrontierVoxels(
   voxblox::LongIndexHashMapType<size_t>::type voxel_map;
   voxblox::GlobalIndexVector remove_voxel;
   deserializeFrontierVoxelsMsg(frontier_voxels, &voxel_map, &remove_voxel);
-  
-  removeOldFrontierVoxels(remove_voxel);
-  clusterNewFrontiers(voxel_map);
-  serializeFrontierClustersMsg();
+  // Select frontiers inside AABB of the msg
+  voxblox::AlignedVector<Frontier*> local_frontiers;
+  for (auto& frontier : frontiers_) {
+    if (isInsideAabb(frontier)) {
+      local_frontiers.emplace_back(&frontier);
+    }
+  }
+
+  removeOldFrontierVoxels(local_frontiers, remove_voxel);
+  clusterNewFrontiers(local_frontiers, voxel_map);
+  serializeFrontierClustersMsg(local_frontiers);
+}
+
+bool FrontierClustering::isInsideAabb(const Frontier& frontier) const {
+  voxblox::GlobalIndex f_aabb_min;
+  voxblox::GlobalIndex f_aabb_max;
+  frontier.getAabb(&f_aabb_min, &f_aabb_max);
+  if (f_aabb_min.x() < aabb_min_.x() or f_aabb_min.y() < aabb_min_.y() or
+      f_aabb_min.z() < aabb_min_.z() or f_aabb_max.x() > aabb_max_.x() or
+      f_aabb_max.y() > aabb_max_.y() or f_aabb_max.z() > aabb_max_.z()) {
+    return false;
+  }
+  return true;
 }
 
 void FrontierClustering::removeOldFrontierVoxels(
+    voxblox::AlignedVector<Frontier*>& local_frontiers,
     voxblox::GlobalIndexVector& remove_voxel) {
   visualization_msgs::Marker m;
   for (const auto& voxel : remove_voxel) {
-    for (auto f : frontiers_) {
-      if (f.hasVoxel(voxel)) {
-        f.removeVoxel(voxel);
+    for (auto f : local_frontiers) {
+      if (f->hasVoxel(voxel)) {
+        f->removeVoxel(voxel);
         break;
       }
     }
@@ -42,6 +62,7 @@ void FrontierClustering::removeOldFrontierVoxels(
 }
 
 void FrontierClustering::clusterNewFrontiers(
+    voxblox::AlignedVector<Frontier*>& local_frontiers,
     voxblox::LongIndexHashMapType<size_t>::type& voxel_map) {
   if (not voxel_map.empty()) {
     voxblox::AlignedVector<Frontier> frontiers_tmp;
@@ -53,15 +74,16 @@ void FrontierClustering::clusterNewFrontiers(
     bool merged;
     for (const auto& f_tmp : frontiers_tmp) {
       merged = false;
-      for (auto& frontier : frontiers_) {
-        if (f_tmp.checkIntersectionAabb(frontier)) {
-          frontier.addFrontier(f_tmp.frontier_voxels());
+      for (auto& frontier : local_frontiers) {
+        if (f_tmp.checkIntersectionAabb(*frontier)) {
+          frontier->addFrontier(f_tmp.frontier_voxels());
           merged = true;
           break;
         }
       }
       if (not merged) {
         frontiers_.emplace_back(f_tmp);
+        local_frontiers.emplace_back(&frontiers_.back());
       }
     }
   }
@@ -87,7 +109,9 @@ void FrontierClustering::clusterNewFrontiersRec(
   }
 }
 
-void FrontierClustering::serializeFrontierClustersMsg() {
+//TODO: Update local frontiers
+void FrontierClustering::serializeFrontierClustersMsg(
+    voxblox::AlignedVector<Frontier*>& local_frontiers) {
   frontiers_msg_.action = visualization_msgs::Marker::DELETE;
   frontiers_pub_.publish(frontiers_msg_);
   frontiers_msg_.header.frame_id = "map";

@@ -7,8 +7,8 @@
 namespace frontiers {
 
 Frontier::Frontier()
-    : aabb_min_(INT32_MAX, INT32_MAX, INT32_MAX),
-      aabb_max_(INT32_MIN, INT32_MIN, INT32_MIN) {
+    : aabb_min_(INT64_MAX, INT64_MAX, INT64_MAX),
+      aabb_max_(INT64_MIN, INT64_MIN, INT64_MIN) {
   uint64_t timeSeed =
       std::chrono::high_resolution_clock::now().time_since_epoch().count();
   std::seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed >> 32u)};
@@ -42,7 +42,7 @@ void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
 }
 
 void Frontier::addFrontier(const voxblox::LongIndexSet &frontier_voxels) {
-  for (const auto & frontier_voxel : frontier_voxels) {
+  for (const auto &frontier_voxel : frontier_voxels) {
     for (size_t i = 0; i < 3; ++i) {
       if (frontier_voxel[i] < aabb_min_[i]) {
         aabb_min_.x() = frontier_voxel[i];
@@ -58,7 +58,13 @@ void Frontier::addFrontier(const voxblox::LongIndexSet &frontier_voxels) {
 // TODO: Check if cluster is still connected
 void Frontier::removeVoxel(const voxblox::GlobalIndex &global_index) {
   frontier_voxels_.erase(global_index);
-  //TODO: Recalculate AABB
+  // TODO: Recalculate AABB
+}
+
+void Frontier::getAabb(voxblox::GlobalIndex *aabb_min,
+                       voxblox::GlobalIndex *aabb_max) const {
+  *aabb_min = aabb_min_;
+  *aabb_max = aabb_max_;
 }
 
 bool Frontier::checkIntersectionAabb(const Frontier &frontier) const {
