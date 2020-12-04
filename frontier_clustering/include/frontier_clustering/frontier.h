@@ -22,7 +22,7 @@ class Frontier {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  Frontier();
+  Frontier(unsigned int id);
 
   virtual ~Frontier() = default;
 
@@ -32,17 +32,24 @@ class Frontier {
     return frontier_voxels_;
   }
 
+  const unsigned int& id() const { return id_; }
+
+  void setId(unsigned int id) { id_ = id; }
+
+  void setColor(const std_msgs::ColorRGBA& color) { color_ = color; }
+
   bool hasVoxel(const voxblox::GlobalIndex& global_index) const;
 
   void addVoxel(const voxblox::GlobalIndex& global_index);
 
   void addFrontier(const voxblox::LongIndexSet& frontier_voxels);
 
-  void removeVoxel(const voxblox::GlobalIndex& global_index);
+  size_t removeVoxel(const voxblox::GlobalIndex& global_index);
 
   const std_msgs::ColorRGBA& color() const { return color_; }
 
-  void getAabb(voxblox::GlobalIndex* aabb_min, voxblox::GlobalIndex* aabb_max) const;
+  void getAabb(voxblox::GlobalIndex* aabb_min,
+               voxblox::GlobalIndex* aabb_max) const;
 
   bool checkIntersectionAabb(const Frontier& frontier) const;
 
@@ -52,6 +59,8 @@ class Frontier {
 
   voxblox::GlobalIndex aabb_min_;
   voxblox::GlobalIndex aabb_max_;
+
+  unsigned int id_;
 };
 
 }  // namespace frontiers

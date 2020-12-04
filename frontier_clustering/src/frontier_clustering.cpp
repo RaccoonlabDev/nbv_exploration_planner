@@ -8,8 +8,10 @@ namespace frontiers {
 
 FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
                                        const ros::NodeHandle& nh_private)
-    : nh_(nh), nh_private_(nh_private) {
-  frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 1);
+    : nh_(nh), nh_private_(nh_private), id_counter_(0) {
+  frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 20);
+  frontiers_aabb_pub_ =
+      nh_.advertise<visualization_msgs::Marker>("frontiers_aabb", 20);
   frontier_voxels_sub_ =
       nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
                     &FrontierClustering::insertFrontierVoxels, this);
@@ -21,15 +23,8 @@ void FrontierClustering::insertFrontierVoxels(
     const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels) {
   voxblox::LongIndexHashMapType<size_t>::type voxel_map;
   voxblox::GlobalIndexVector remove_voxel;
-  deserializeFrontierVoxelsMsg(frontier_voxels, &voxel_map, &remove_voxel);
-  // Select frontiers inside AABB of the msg
-  voxblox::AlignedVector<Frontier*> local_frontiers;
-  for (auto& frontier : frontiers_) {
-    if (isInsideAabb(frontier)) {
-      local_frontiers.emplace_back(&frontier);
-    }
-  }
-
+  deserializeFrontierVoxelsMsg(frontier_voxels, voxel_map, remove_voxel);
+  voxblox::AlignedList<Frontier*> local_frontiers;
   removeOldFrontierVoxels(local_frontiers, remove_voxel);
   clusterNewFrontiers(local_frontiers, voxel_map);
   serializeFrontierClustersMsg(local_frontiers);
@@ -48,13 +43,36 @@ bool FrontierClustering::isInsideAabb(const Frontier& frontier) const {
 }
 
 void FrontierClustering::removeOldFrontierVoxels(
-    voxblox::AlignedVector<Frontier*>& local_frontiers,
+    voxblox::AlignedList<Frontier*>& local_frontiers,
     voxblox::GlobalIndexVector& remove_voxel) {
-  visualization_msgs::Marker m;
+  // Select frontiers inside AABB of the msg
+  auto iter = frontiers_.begin();
+  while (iter != frontiers_.end()) {
+    if (iter->size() < 10) {
+      iter = frontiers_.erase(iter);
+    }
+    if (isInsideAabb(*iter)) {
+      local_frontiers.emplace_back(&(*iter));
+    }
+    ++iter;
+  }
+  VLOG(5) << "Local Frontiers size: " << local_frontiers.size();
+
   for (const auto& voxel : remove_voxel) {
-    for (auto f : local_frontiers) {
-      if (f->hasVoxel(voxel)) {
-        f->removeVoxel(voxel);
+    for (auto it = local_frontiers.begin(); it != local_frontiers.end(); ++it) {
+      if ((*it)->hasVoxel(voxel)) {
+        if ((*it)->removeVoxel(voxel) < 10) {
+          visualization_msgs::Marker frontier_msg;
+          frontier_msg.header.frame_id = "map";
+          frontier_msg.header.stamp = ros::Time();
+          frontier_msg.ns = "frontiers";
+          frontier_msg.id = (*it)->id();
+          frontier_msg.type = visualization_msgs::Marker::CUBE_LIST;
+          frontier_msg.action = visualization_msgs::Marker::DELETE;
+          frontiers_pub_.publish(frontier_msg);
+
+          local_frontiers.erase(it);
+        }
         break;
       }
     }
@@ -62,7 +80,7 @@ void FrontierClustering::removeOldFrontierVoxels(
 }
 
 void FrontierClustering::clusterNewFrontiers(
-    voxblox::AlignedVector<Frontier*>& local_frontiers,
+    voxblox::AlignedList<Frontier*>& local_frontiers,
     voxblox::LongIndexHashMapType<size_t>::type& voxel_map) {
   if (not voxel_map.empty()) {
     voxblox::AlignedVector<Frontier> frontiers_tmp;
@@ -71,8 +89,8 @@ void FrontierClustering::clusterNewFrontiers(
                              it);
     }
     // Merge the new frontiers with the existing ones
-    bool merged;
-    for (const auto& f_tmp : frontiers_tmp) {
+    /*bool merged;
+    for (auto& f_tmp : frontiers_tmp) {
       merged = false;
       for (auto& frontier : local_frontiers) {
         if (f_tmp.checkIntersectionAabb(*frontier)) {
@@ -82,6 +100,16 @@ void FrontierClustering::clusterNewFrontiers(
         }
       }
       if (not merged) {
+        f_tmp.setId(id_counter_);
+        ++id_counter_;
+        frontiers_.emplace_back(f_tmp);
+        local_frontiers.emplace_back(&frontiers_.back());
+      }
+    }*/
+    for (auto& f_tmp : frontiers_tmp) {
+      if (f_tmp.size() > 10) {
+        f_tmp.setId(id_counter_);
+        ++id_counter_;
         frontiers_.emplace_back(f_tmp);
         local_frontiers.emplace_back(&frontiers_.back());
       }
@@ -98,7 +126,7 @@ void FrontierClustering::clusterNewFrontiersRec(
   } else if (it->second == -1) {
     it->second = cluster;
     if (cluster == frontiers_tmp.size()) {
-      frontiers_tmp.emplace_back(Frontier());
+      frontiers_tmp.emplace_back(Frontier(0));
     }
     frontiers_tmp[cluster].addVoxel(it->first);
 
@@ -109,48 +137,43 @@ void FrontierClustering::clusterNewFrontiersRec(
   }
 }
 
-//TODO: Update local frontiers
 void FrontierClustering::serializeFrontierClustersMsg(
-    voxblox::AlignedVector<Frontier*>& local_frontiers) {
-  frontiers_msg_.action = visualization_msgs::Marker::DELETE;
-  frontiers_pub_.publish(frontiers_msg_);
-  frontiers_msg_.header.frame_id = "map";
-  frontiers_msg_.header.stamp = ros::Time::now();
-  frontiers_msg_.ns = "frontiers";
-  frontiers_msg_.id = 0;
-  frontiers_msg_.type = visualization_msgs::Marker::CUBE_LIST;
-  frontiers_msg_.action = visualization_msgs::Marker::ADD;
-  frontiers_msg_.pose.orientation.x = 0.0;
-  frontiers_msg_.pose.orientation.y = 0.0;
-  frontiers_msg_.pose.orientation.z = 0.0;
-  frontiers_msg_.pose.orientation.w = 1.0;
-  frontiers_msg_.scale.x = voxel_size_;
-  frontiers_msg_.scale.y = voxel_size_;
-  frontiers_msg_.scale.z = voxel_size_;
-  frontiers_msg_.points.clear();
-  frontiers_msg_.colors.clear();
-  geometry_msgs::Point p;
-  for (const auto& frontier : frontiers_) {
-    for (const auto& voxel : frontier.frontier_voxels()) {
-      frontiers_msg_.colors.emplace_back(frontier.color());
+    voxblox::AlignedList<Frontier*>& local_frontiers) {
+  for (const auto& frontier : local_frontiers) {
+    visualization_msgs::Marker frontier_msg;
+    frontier_msg.header.frame_id = "map";
+    frontier_msg.header.stamp = ros::Time();
+    frontier_msg.ns = "frontiers";
+    frontier_msg.id = frontier->id();
+    frontier_msg.type = visualization_msgs::Marker::CUBE_LIST;
+    frontier_msg.action = visualization_msgs::Marker::ADD;
+    frontier_msg.pose.orientation.x = 0.0;
+    frontier_msg.pose.orientation.y = 0.0;
+    frontier_msg.pose.orientation.z = 0.0;
+    frontier_msg.pose.orientation.w = 1.0;
+    frontier_msg.color = frontier->color();
+    frontier_msg.scale.x = voxel_size_;
+    frontier_msg.scale.y = voxel_size_;
+    frontier_msg.scale.z = voxel_size_;
+    frontier_msg.points.reserve(frontier->size());
+    geometry_msgs::Point p;
+    for (const auto& voxel : frontier->frontier_voxels()) {
       p.x =
           (static_cast<voxblox::FloatingPoint>(voxel.x()) + 0.5) * voxel_size_;
       p.y =
           (static_cast<voxblox::FloatingPoint>(voxel.y()) + 0.5) * voxel_size_;
       p.z =
           (static_cast<voxblox::FloatingPoint>(voxel.z()) + 0.5) * voxel_size_;
-      frontiers_msg_.points.emplace_back(p);
+      frontier_msg.points.emplace_back(p);
     }
+    frontiers_pub_.publish(frontier_msg);
   }
-  frontiers_pub_.publish(frontiers_msg_);
 }
 
 void FrontierClustering::deserializeFrontierVoxelsMsg(
     const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
-    voxblox::LongIndexHashMapType<size_t>::type* voxel_map,
-    voxblox::GlobalIndexVector* remove_voxel) {
-  CHECK_NOTNULL(voxel_map);
-  CHECK_NOTNULL(remove_voxel);
+    voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
+    voxblox::GlobalIndexVector& remove_voxel) {
   voxel_size_ = frontier_voxels->voxel_size;
   voxels_per_side_ = frontier_voxels->voxels_per_side;
 
@@ -163,9 +186,9 @@ void FrontierClustering::deserializeFrontierVoxelsMsg(
   for (auto fvoxel : frontier_voxels->voxels) {
     global_index = {fvoxel.index.x, fvoxel.index.y, fvoxel.index.z};
     if (fvoxel.action == 0) {
-      remove_voxel->emplace_back(global_index);
+      remove_voxel.emplace_back(global_index);
     } else {
-      (*voxel_map)[global_index] = -1;
+      voxel_map[global_index] = -1;
     }
   }
 }

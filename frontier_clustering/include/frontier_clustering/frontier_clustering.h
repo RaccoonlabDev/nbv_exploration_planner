@@ -15,6 +15,8 @@
 
 namespace frontiers {
 
+typedef voxblox::AlignedList<Frontier> Frontiers;
+
 class FrontierClustering {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -31,11 +33,12 @@ class FrontierClustering {
   bool isInsideAabb(const Frontier& frontier) const;
 
   void removeOldFrontierVoxels(
-      voxblox::AlignedVector<Frontier*>& local_frontiers,
+      voxblox::AlignedList<Frontier*>&
+          local_frontiers,
       voxblox::GlobalIndexVector& remove_voxel);
 
   void clusterNewFrontiers(
-      voxblox::AlignedVector<Frontier*>& local_frontiers,
+      voxblox::AlignedList<Frontier*>& local_frontiers,
       voxblox::LongIndexHashMapType<size_t>::type& voxel_map);
 
   void clusterNewFrontiersRec(
@@ -45,11 +48,11 @@ class FrontierClustering {
 
   void deserializeFrontierVoxelsMsg(
       const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
-      voxblox::LongIndexHashMapType<size_t>::type* voxel_map,
-      voxblox::GlobalIndexVector* remove_voxel);
+      voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
+      voxblox::GlobalIndexVector& remove_voxel);
 
   void serializeFrontierClustersMsg(
-      voxblox::AlignedVector<Frontier*>& local_frontiers);
+      voxblox::AlignedList<Frontier*>& local_frontiers);
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
@@ -60,13 +63,14 @@ class FrontierClustering {
   voxblox::GlobalIndex aabb_min_;
   voxblox::GlobalIndex aabb_max_;
 
-  visualization_msgs::Marker frontiers_msg_;
+  unsigned int id_counter_;
 
   ros::Publisher frontiers_pub_;
+  ros::Publisher frontiers_aabb_pub_;
 
   ros::Subscriber frontier_voxels_sub_;
 
-  voxblox::AlignedDeque<Frontier> frontiers_;
+  Frontiers frontiers_;
 };
 
 }  // namespace frontiers

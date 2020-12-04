@@ -54,6 +54,13 @@ void serializeFrontierVoxelsAsMsg(Layer<VoxelType>* layer, bool only_updated,
       block->updated().reset(Update::kFrontier);
     }
   }
+  msg->aabb_min.x = aabb_min.x();
+  msg->aabb_min.y = aabb_min.y();
+  msg->aabb_min.z = aabb_min.z();
+
+  msg->aabb_max.x = aabb_max.x();
+  msg->aabb_max.y = aabb_max.y();
+  msg->aabb_max.z = aabb_max.z();
 }
 
 template <typename VoxelType>

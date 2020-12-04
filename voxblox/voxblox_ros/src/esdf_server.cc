@@ -53,6 +53,8 @@ void EsdfServer::setupRos() {
 
   frontiers_pub_ = nh_private_.advertise<voxblox_msgs::FrontierVoxels>(
       ns_ + "frontier_voxels", 1);
+  /*frontiers_pub_ = nh_private_.advertise<visualization_msgs::MarkerArray>(
+      ns_ + "frontier_voxels", 1);*/
 
   // Set up subscriber.
   esdf_map_sub_ = nh_private_.subscribe(ns_ + "esdf_map_in", 1,

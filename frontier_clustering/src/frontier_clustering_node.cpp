@@ -4,8 +4,8 @@
 
 #include "frontier_clustering/frontier_clustering.h"
 
-#include <glog/logging.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "frontierClustering");
