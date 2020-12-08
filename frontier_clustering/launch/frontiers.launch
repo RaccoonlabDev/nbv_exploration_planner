@@ -1,4 +1,8 @@
 <launch>
+    <arg name="size_threshold" default="1000"/>
+
     <node name="frontierClustering" pkg="frontier_clustering" type="frontierClustering" output="screen"
-          args="-alsologtostderr --v=0" />
+          args="-alsologtostderr --v=5">
+        <param name="size_threshold" type="double" value="$(arg size_threshold)"/>
+    </node>
 </launch>

@@ -9,12 +9,14 @@ namespace frontiers {
 FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
                                        const ros::NodeHandle& nh_private)
     : nh_(nh), nh_private_(nh_private), id_counter_(0) {
-  frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 20);
+  frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 100);
   frontiers_aabb_pub_ =
-      nh_.advertise<visualization_msgs::Marker>("frontiers_aabb", 20);
+      nh_.advertise<visualization_msgs::Marker>("frontiers_aabb", 100);
   frontier_voxels_sub_ =
       nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
                     &FrontierClustering::insertFrontierVoxels, this);
+
+  nh_private_.param("size_threshold", size_threshold_, 1000.0);
 
   ROS_INFO("All set! Spinning...");
 }
@@ -34,10 +36,12 @@ bool FrontierClustering::isInsideAabb(const Frontier& frontier) const {
   voxblox::GlobalIndex f_aabb_min;
   voxblox::GlobalIndex f_aabb_max;
   frontier.getAabb(&f_aabb_min, &f_aabb_max);
-  if (f_aabb_min.x() < aabb_min_.x() or f_aabb_min.y() < aabb_min_.y() or
-      f_aabb_min.z() < aabb_min_.z() or f_aabb_max.x() > aabb_max_.x() or
-      f_aabb_max.y() > aabb_max_.y() or f_aabb_max.z() > aabb_max_.z()) {
-    return false;
+  for (size_t i = 0; i < 3; ++i) {
+    if (not((aabb_min_[i] <= f_aabb_min[i] and f_aabb_min[i] <= aabb_max_[i]) or
+            (f_aabb_min[i] <= aabb_min_[i] and
+             aabb_min_[i] <= f_aabb_max[i]))) {
+      return false;
+    }
   }
   return true;
 }
@@ -50,13 +54,14 @@ void FrontierClustering::removeOldFrontierVoxels(
   while (iter != frontiers_.end()) {
     if (iter->size() < 10) {
       iter = frontiers_.erase(iter);
+      continue;
     }
     if (isInsideAabb(*iter)) {
       local_frontiers.emplace_back(&(*iter));
     }
     ++iter;
   }
-  VLOG(5) << "Local Frontiers size: " << local_frontiers.size();
+  // VLOG(5) << "Local Frontiers size: " << local_frontiers.size();
 
   for (const auto& voxel : remove_voxel) {
     for (auto it = local_frontiers.begin(); it != local_frontiers.end(); ++it) {
@@ -108,6 +113,7 @@ void FrontierClustering::clusterNewFrontiers(
     }*/
     for (auto& f_tmp : frontiers_tmp) {
       if (f_tmp.size() > 10) {
+        // call the recursive insertion
         f_tmp.setId(id_counter_);
         ++id_counter_;
         frontiers_.emplace_back(f_tmp);
@@ -134,6 +140,27 @@ void FrontierClustering::clusterNewFrontiersRec(
       clusterNewFrontiersRec(voxel_map, frontiers_tmp, cluster,
                              voxel_map.find(it->first + adj));
     }
+  }
+}
+
+void FrontierClustering::insertNewFrontiersRec(Frontier& frontier) {
+  MatrixX3d centered =
+      frontier.mat().rowwise() - frontier.mat().colwise().mean();
+  MatrixX3d cov = centered.adjoint() * centered;
+  Eigen::SelfAdjointEigenSolver<MatrixX3d> eig(cov);
+  double eigen_val = eig.eigenvalues()[2];
+
+  voxblox::GlobalIndex f_aabb_min;
+  voxblox::GlobalIndex f_aabb_max;
+  const static voxblox::GlobalIndex ones{1, 1, 1};
+  frontier.getAabb(&f_aabb_min, &f_aabb_max);
+  VLOG(5) << "Eigen Value for "
+          << ((f_aabb_max - f_aabb_min) + ones).transpose() << ": "
+          << eigen_val;
+  if (eigen_val > size_threshold_) {
+    // somehow divide the dataset into two equal sides along the main axis
+    // auto eigen_vec = eig.eigenvectors().col(2);
+    //insertNewFrontiersRec();
   }
 }
 

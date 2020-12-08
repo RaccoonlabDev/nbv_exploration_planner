@@ -13,10 +13,18 @@
 
 namespace frontiers {
 
+typedef Eigen::Matrix<double, Eigen::Dynamic, 3> MatrixX3d;
+
 static const voxblox::GlobalIndexVector adjacent{
-    voxblox::GlobalIndex{1, 0, 0}, voxblox::GlobalIndex{-1, 0, 0},
-    voxblox::GlobalIndex{0, 1, 0}, voxblox::GlobalIndex{0, -1, 0},
-    voxblox::GlobalIndex{0, 0, 1}, voxblox::GlobalIndex{0, 0, -1}};
+    voxblox::GlobalIndex{1, 0, 0},  voxblox::GlobalIndex{-1, 0, 0},
+    voxblox::GlobalIndex{0, 1, 0},  voxblox::GlobalIndex{0, -1, 0},
+    voxblox::GlobalIndex{0, 0, 1},  voxblox::GlobalIndex{0, 0, -1},
+    voxblox::GlobalIndex{1, 1, 0},  voxblox::GlobalIndex{-1, 1, 0},
+    voxblox::GlobalIndex{1, -1, 0}, voxblox::GlobalIndex{-1, -1, 0},
+    voxblox::GlobalIndex{1, 0, 1},  voxblox::GlobalIndex{-1, 0, 1},
+    voxblox::GlobalIndex{1, 0, -1}, voxblox::GlobalIndex{-1, 0, -1},
+    voxblox::GlobalIndex{0, 1, 1},  voxblox::GlobalIndex{0, -1, 1},
+    voxblox::GlobalIndex{0, 1, -1}, voxblox::GlobalIndex{0, -1, -1}};
 
 class Frontier {
  public:
@@ -31,6 +39,8 @@ class Frontier {
   const voxblox::LongIndexSet& frontier_voxels() const {
     return frontier_voxels_;
   }
+
+  const MatrixX3d& mat() const { return mat_; }
 
   const unsigned int& id() const { return id_; }
 
@@ -55,6 +65,8 @@ class Frontier {
 
  private:
   voxblox::LongIndexSet frontier_voxels_;
+  MatrixX3d mat_;
+
   std_msgs::ColorRGBA color_;
 
   voxblox::GlobalIndex aabb_min_;

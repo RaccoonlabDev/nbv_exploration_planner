@@ -32,10 +32,8 @@ class FrontierClustering {
  private:
   bool isInsideAabb(const Frontier& frontier) const;
 
-  void removeOldFrontierVoxels(
-      voxblox::AlignedList<Frontier*>&
-          local_frontiers,
-      voxblox::GlobalIndexVector& remove_voxel);
+  void removeOldFrontierVoxels(voxblox::AlignedList<Frontier*>& local_frontiers,
+                               voxblox::GlobalIndexVector& remove_voxel);
 
   void clusterNewFrontiers(
       voxblox::AlignedList<Frontier*>& local_frontiers,
@@ -45,6 +43,8 @@ class FrontierClustering {
       voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
       voxblox::AlignedVector<Frontier>& frontiers_tmp, size_t cluster,
       voxblox::LongIndexHashMapType<size_t>::type::iterator it);
+
+  void insertNewFrontiersRec(Frontier& frontier);
 
   void deserializeFrontierVoxelsMsg(
       const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
@@ -59,6 +59,7 @@ class FrontierClustering {
 
   double voxel_size_;
   double voxels_per_side_;
+  double size_threshold_;
 
   voxblox::GlobalIndex aabb_min_;
   voxblox::GlobalIndex aabb_max_;
