@@ -113,7 +113,7 @@ void FrontierClustering::clusterNewFrontiers(
     }*/
     for (auto& f_tmp : frontiers_tmp) {
       if (f_tmp.size() > 10) {
-        // call the recursive insertion
+        insertNewFrontiersRec(f_tmp);
         f_tmp.setId(id_counter_);
         ++id_counter_;
         frontiers_.emplace_back(f_tmp);
@@ -144,11 +144,12 @@ void FrontierClustering::clusterNewFrontiersRec(
 }
 
 void FrontierClustering::insertNewFrontiersRec(Frontier& frontier) {
-  MatrixX3d centered =
-      frontier.mat().rowwise() - frontier.mat().colwise().mean();
+  auto mean = frontier.mat().colwise().mean();
+  MatrixX3d centered = frontier.mat().rowwise() - mean;
   MatrixX3d cov = centered.adjoint() * centered;
   Eigen::SelfAdjointEigenSolver<MatrixX3d> eig(cov);
   double eigen_val = eig.eigenvalues()[2];
+  auto eigen_vec = eig.eigenvectors().col(2);
 
   voxblox::GlobalIndex f_aabb_min;
   voxblox::GlobalIndex f_aabb_max;
@@ -157,10 +158,38 @@ void FrontierClustering::insertNewFrontiersRec(Frontier& frontier) {
   VLOG(5) << "Eigen Value for "
           << ((f_aabb_max - f_aabb_min) + ones).transpose() << ": "
           << eigen_val;
+  VLOG(5) << "EigenVector: " << eigen_vec.transpose();
+  VLOG(5) << "Mean: " << mean;
   if (eigen_val > size_threshold_) {
+    visualization_msgs::Marker m;
+    m.header.frame_id = "map";
+    m.header.stamp = ros::Time();
+    m.ns = "pca";
+    m.id = frontier.id();
+    m.type = visualization_msgs::Marker::ARROW;
+    m.action = visualization_msgs::Marker::ADD;
+    m.pose.orientation.x = 0.0;
+    m.pose.orientation.y = 0.0;
+    m.pose.orientation.z = 0.0;
+    m.pose.orientation.w = 1.0;
+    m.color.r = 1.0;
+    m.color.g = 0.0;
+    m.color.b = 0.0;
+    m.color.a = 1.0;
+    m.scale.x = 0.1;
+    m.scale.y = 0.2;
+    geometry_msgs::Point p;
+    p.x = mean.x()*voxel_size_;
+    p.y = mean.y()*voxel_size_;
+    p.z = mean.z()*voxel_size_;
+    m.points.emplace_back(p);
+    p.x = (eigen_vec.x()+mean.x())*voxel_size_;
+    p.y = (eigen_vec.y()+mean.y())*voxel_size_;
+    p.z = (eigen_vec.z()+mean.z())*voxel_size_;
+    m.points.emplace_back(p);
+    frontiers_pub_.publish(m);
     // somehow divide the dataset into two equal sides along the main axis
-    // auto eigen_vec = eig.eigenvectors().col(2);
-    //insertNewFrontiersRec();
+    // insertNewFrontiersRec();
   }
 }
 
