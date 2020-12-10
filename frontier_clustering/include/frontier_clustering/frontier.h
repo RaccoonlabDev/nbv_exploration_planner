@@ -36,7 +36,7 @@ class Frontier {
 
   size_t size() const { return frontier_voxels_.size(); }
 
-  const voxblox::LongIndexSet& frontier_voxels() const {
+  const voxblox::LongIndexHashMapType<size_t>::type& frontier_voxels() const {
     return frontier_voxels_;
   }
 
@@ -52,8 +52,6 @@ class Frontier {
 
   void addVoxel(const voxblox::GlobalIndex& global_index);
 
-  void addFrontier(const voxblox::LongIndexSet& frontier_voxels);
-
   size_t removeVoxel(const voxblox::GlobalIndex& global_index);
 
   const std_msgs::ColorRGBA& color() const { return color_; }
@@ -64,7 +62,7 @@ class Frontier {
   bool checkIntersectionAabb(const Frontier& frontier) const;
 
  private:
-  voxblox::LongIndexSet frontier_voxels_;
+  voxblox::LongIndexHashMapType<size_t>::type frontier_voxels_;
   MatrixX3d mat_;
 
   std_msgs::ColorRGBA color_;

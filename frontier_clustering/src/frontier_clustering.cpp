@@ -8,7 +8,11 @@ namespace frontiers {
 
 FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
                                        const ros::NodeHandle& nh_private)
-    : nh_(nh), nh_private_(nh_private), id_counter_(0) {
+    : nh_(nh),
+      nh_private_(nh_private),
+      id_counter_(0),
+      bbx_min_(0, 0, 0),
+      bbx_max_(0, 0, 0) {
   frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 100);
   frontiers_aabb_pub_ =
       nh_.advertise<visualization_msgs::Marker>("frontiers_aabb", 100);
@@ -16,7 +20,13 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
       nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
                     &FrontierClustering::insertFrontierVoxels, this);
 
-  nh_private_.param("size_threshold", size_threshold_, 1000.0);
+  nh_private_.param("size_threshold", size_threshold_, 10000.0);
+  nh_private_.param("bbx/minX", bbx_min_.x(), bbx_min_.x());
+  nh_private_.param("bbx/minY", bbx_min_.y(), bbx_min_.y());
+  nh_private_.param("bbx/minZ", bbx_min_.z(), bbx_min_.z());
+  nh_private_.param("bbx/maxX", bbx_max_.x(), bbx_max_.x());
+  nh_private_.param("bbx/maxY", bbx_max_.y(), bbx_max_.y());
+  nh_private_.param("bbx/maxZ", bbx_max_.z(), bbx_max_.z());
 
   ROS_INFO("All set! Spinning...");
 }
@@ -113,11 +123,7 @@ void FrontierClustering::clusterNewFrontiers(
     }*/
     for (auto& f_tmp : frontiers_tmp) {
       if (f_tmp.size() > 10) {
-        insertNewFrontiersRec(f_tmp);
-        f_tmp.setId(id_counter_);
-        ++id_counter_;
-        frontiers_.emplace_back(f_tmp);
-        local_frontiers.emplace_back(&frontiers_.back());
+        insertNewFrontiersRec(f_tmp, local_frontiers);
       }
     }
   }
@@ -143,53 +149,38 @@ void FrontierClustering::clusterNewFrontiersRec(
   }
 }
 
-void FrontierClustering::insertNewFrontiersRec(Frontier& frontier) {
+void FrontierClustering::insertNewFrontiersRec(
+    Frontier& frontier, voxblox::AlignedList<Frontier*>& local_frontiers) {
   auto mean = frontier.mat().colwise().mean();
   MatrixX3d centered = frontier.mat().rowwise() - mean;
   MatrixX3d cov = centered.adjoint() * centered;
   Eigen::SelfAdjointEigenSolver<MatrixX3d> eig(cov);
   double eigen_val = eig.eigenvalues()[2];
-  auto eigen_vec = eig.eigenvectors().col(2);
 
-  voxblox::GlobalIndex f_aabb_min;
-  voxblox::GlobalIndex f_aabb_max;
-  const static voxblox::GlobalIndex ones{1, 1, 1};
-  frontier.getAabb(&f_aabb_min, &f_aabb_max);
-  VLOG(5) << "Eigen Value for "
-          << ((f_aabb_max - f_aabb_min) + ones).transpose() << ": "
-          << eigen_val;
-  VLOG(5) << "EigenVector: " << eigen_vec.transpose();
-  VLOG(5) << "Mean: " << mean;
   if (eigen_val > size_threshold_) {
-    visualization_msgs::Marker m;
-    m.header.frame_id = "map";
-    m.header.stamp = ros::Time();
-    m.ns = "pca";
-    m.id = frontier.id();
-    m.type = visualization_msgs::Marker::ARROW;
-    m.action = visualization_msgs::Marker::ADD;
-    m.pose.orientation.x = 0.0;
-    m.pose.orientation.y = 0.0;
-    m.pose.orientation.z = 0.0;
-    m.pose.orientation.w = 1.0;
-    m.color.r = 1.0;
-    m.color.g = 0.0;
-    m.color.b = 0.0;
-    m.color.a = 1.0;
-    m.scale.x = 0.1;
-    m.scale.y = 0.2;
-    geometry_msgs::Point p;
-    p.x = mean.x()*voxel_size_;
-    p.y = mean.y()*voxel_size_;
-    p.z = mean.z()*voxel_size_;
-    m.points.emplace_back(p);
-    p.x = (eigen_vec.x()+mean.x())*voxel_size_;
-    p.y = (eigen_vec.y()+mean.y())*voxel_size_;
-    p.z = (eigen_vec.z()+mean.z())*voxel_size_;
-    m.points.emplace_back(p);
-    frontiers_pub_.publish(m);
-    // somehow divide the dataset into two equal sides along the main axis
-    // insertNewFrontiersRec();
+    auto eigen_vec = eig.eigenvectors().col(2);
+    Eigen::Vector3d normal{eigen_vec(0, 0) + mean.x(),
+                           eigen_vec(1, 0) + mean.y(),
+                           eigen_vec(2, 0) + mean.z()};
+    normal = normal / normal.norm();
+    double distance = normal.dot(mean);
+    Frontier frontier1(0);
+    Frontier frontier2(0);
+    for (const auto& voxel : frontier.frontier_voxels()) {
+      auto row = frontier.mat().row(voxel.second);
+      if (normal.dot(row) >= distance) {
+        frontier1.addVoxel(voxel.first);
+      } else {
+        frontier2.addVoxel(voxel.first);
+      }
+    }
+    insertNewFrontiersRec(frontier1, local_frontiers);
+    insertNewFrontiersRec(frontier2, local_frontiers);
+  } else {
+    frontier.setId(id_counter_);
+    ++id_counter_;
+    frontiers_.emplace_back(frontier);
+    local_frontiers.emplace_back(&frontiers_.back());
   }
 }
 
@@ -214,12 +205,12 @@ void FrontierClustering::serializeFrontierClustersMsg(
     frontier_msg.points.reserve(frontier->size());
     geometry_msgs::Point p;
     for (const auto& voxel : frontier->frontier_voxels()) {
-      p.x =
-          (static_cast<voxblox::FloatingPoint>(voxel.x()) + 0.5) * voxel_size_;
-      p.y =
-          (static_cast<voxblox::FloatingPoint>(voxel.y()) + 0.5) * voxel_size_;
-      p.z =
-          (static_cast<voxblox::FloatingPoint>(voxel.z()) + 0.5) * voxel_size_;
+      p.x = (static_cast<voxblox::FloatingPoint>(voxel.first.x()) + 0.5) *
+            voxel_size_;
+      p.y = (static_cast<voxblox::FloatingPoint>(voxel.first.y()) + 0.5) *
+            voxel_size_;
+      p.z = (static_cast<voxblox::FloatingPoint>(voxel.first.z()) + 0.5) *
+            voxel_size_;
       frontier_msg.points.emplace_back(p);
     }
     frontiers_pub_.publish(frontier_msg);
@@ -239,7 +230,10 @@ void FrontierClustering::deserializeFrontierVoxelsMsg(
                frontier_voxels->aabb_max.z};
 
   voxblox::GlobalIndex global_index;
-  for (auto fvoxel : frontier_voxels->voxels) {
+  for (const auto& fvoxel : frontier_voxels->voxels) {
+    if (not isInsideBbx(fvoxel.index)) {
+      continue;
+    }
     global_index = {fvoxel.index.x, fvoxel.index.y, fvoxel.index.z};
     if (fvoxel.action == 0) {
       remove_voxel.emplace_back(global_index);

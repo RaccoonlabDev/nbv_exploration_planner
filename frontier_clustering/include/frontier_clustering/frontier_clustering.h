@@ -44,12 +44,25 @@ class FrontierClustering {
       voxblox::AlignedVector<Frontier>& frontiers_tmp, size_t cluster,
       voxblox::LongIndexHashMapType<size_t>::type::iterator it);
 
-  void insertNewFrontiersRec(Frontier& frontier);
+  void insertNewFrontiersRec(Frontier& frontier,
+                             voxblox::AlignedList<Frontier*>& local_frontiers);
 
   void deserializeFrontierVoxelsMsg(
       const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
       voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
       voxblox::GlobalIndexVector& remove_voxel);
+
+  inline bool isInsideBbx(const voxblox_msgs::Index & voxel) const {
+    static Eigen::Vector3d bbx_min = bbx_min_/voxel_size_;
+    static Eigen::Vector3d bbx_max = bbx_max_/voxel_size_;
+
+    if (voxel.x < bbx_min.x() or voxel.x > bbx_max.x() or
+        voxel.y < bbx_min.y() or voxel.y > bbx_max.y() or
+        voxel.z < bbx_min.z() or voxel.z > bbx_max.z()) {
+      return false;
+    }
+    return true;
+  }
 
   void serializeFrontierClustersMsg(
       voxblox::AlignedList<Frontier*>& local_frontiers);
@@ -60,6 +73,9 @@ class FrontierClustering {
   double voxel_size_;
   double voxels_per_side_;
   double size_threshold_;
+
+  Eigen::Vector3d bbx_min_;
+  Eigen::Vector3d bbx_max_;
 
   voxblox::GlobalIndex aabb_min_;
   voxblox::GlobalIndex aabb_max_;
