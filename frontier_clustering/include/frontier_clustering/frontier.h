@@ -34,13 +34,7 @@ class Frontier {
 
   virtual ~Frontier() = default;
 
-  size_t size() const { return frontier_voxels_.size(); }
-
-  const voxblox::LongIndexHashMapType<size_t>::type& frontier_voxels() const {
-    return frontier_voxels_;
-  }
-
-  const MatrixX3d& mat() const { return mat_; }
+  const MatrixX3d& frontier_voxels() const { return frontier_voxels_; }
 
   const unsigned int& id() const { return id_; }
 
@@ -48,22 +42,15 @@ class Frontier {
 
   void setColor(const std_msgs::ColorRGBA& color) { color_ = color; }
 
-  bool hasVoxel(const voxblox::GlobalIndex& global_index) const;
-
   void addVoxel(const voxblox::GlobalIndex& global_index);
-
-  size_t removeVoxel(const voxblox::GlobalIndex& global_index);
 
   const std_msgs::ColorRGBA& color() const { return color_; }
 
   void getAabb(voxblox::GlobalIndex* aabb_min,
                voxblox::GlobalIndex* aabb_max) const;
 
-  bool checkIntersectionAabb(const Frontier& frontier) const;
-
  private:
-  voxblox::LongIndexHashMapType<size_t>::type frontier_voxels_;
-  MatrixX3d mat_;
+  MatrixX3d frontier_voxels_;
 
   std_msgs::ColorRGBA color_;
 

@@ -32,8 +32,9 @@ class FrontierClustering {
  private:
   bool isInsideAabb(const Frontier& frontier) const;
 
-  void removeOldFrontierVoxels(voxblox::AlignedList<Frontier*>& local_frontiers,
-                               voxblox::GlobalIndexVector& remove_voxel);
+  void removeOldFrontierVoxels(
+      voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
+      voxblox::LongIndexSet& remove_voxel);
 
   void clusterNewFrontiers(
       voxblox::AlignedList<Frontier*>& local_frontiers,
@@ -50,11 +51,11 @@ class FrontierClustering {
   void deserializeFrontierVoxelsMsg(
       const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
       voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
-      voxblox::GlobalIndexVector& remove_voxel);
+      voxblox::LongIndexSet& remove_voxel);
 
-  inline bool isInsideBbx(const voxblox_msgs::Index & voxel) const {
-    static Eigen::Vector3d bbx_min = bbx_min_/voxel_size_;
-    static Eigen::Vector3d bbx_max = bbx_max_/voxel_size_;
+  inline bool isInsideBbx(const voxblox_msgs::Index& voxel) const {
+    static Eigen::Vector3d bbx_min = bbx_min_ / voxel_size_;
+    static Eigen::Vector3d bbx_max = bbx_max_ / voxel_size_;
 
     if (voxel.x < bbx_min.x() or voxel.x > bbx_max.x() or
         voxel.y < bbx_min.y() or voxel.y > bbx_max.y() or

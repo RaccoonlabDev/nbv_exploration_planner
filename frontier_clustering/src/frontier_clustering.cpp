@@ -34,63 +34,48 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
 void FrontierClustering::insertFrontierVoxels(
     const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels) {
   voxblox::LongIndexHashMapType<size_t>::type voxel_map;
-  voxblox::GlobalIndexVector remove_voxel;
+  voxblox::LongIndexSet remove_voxel;
+  // Deserialize the ros msg
   deserializeFrontierVoxelsMsg(frontier_voxels, voxel_map, remove_voxel);
+
+  // Remove the outdated frontier voxels and add the rest influenced to the map
+  removeOldFrontierVoxels(voxel_map, remove_voxel);
+
   voxblox::AlignedList<Frontier*> local_frontiers;
-  removeOldFrontierVoxels(local_frontiers, remove_voxel);
+  // Cluster new frontiers inside the updated area
   clusterNewFrontiers(local_frontiers, voxel_map);
+  // Serialize and publish the visualization of the new frontier clusters
   serializeFrontierClustersMsg(local_frontiers);
 }
 
-bool FrontierClustering::isInsideAabb(const Frontier& frontier) const {
-  voxblox::GlobalIndex f_aabb_min;
-  voxblox::GlobalIndex f_aabb_max;
-  frontier.getAabb(&f_aabb_min, &f_aabb_max);
-  for (size_t i = 0; i < 3; ++i) {
-    if (not((aabb_min_[i] <= f_aabb_min[i] and f_aabb_min[i] <= aabb_max_[i]) or
-            (f_aabb_min[i] <= aabb_min_[i] and
-             aabb_min_[i] <= f_aabb_max[i]))) {
-      return false;
-    }
-  }
-  return true;
-}
-
 void FrontierClustering::removeOldFrontierVoxels(
-    voxblox::AlignedList<Frontier*>& local_frontiers,
-    voxblox::GlobalIndexVector& remove_voxel) {
+    voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
+    voxblox::LongIndexSet& remove_voxel) {
   // Select frontiers inside AABB of the msg
   auto iter = frontiers_.begin();
   while (iter != frontiers_.end()) {
-    if (iter->size() < 10) {
+    /*if (iter->size() < 10) {
+      iter = frontiers_.erase(iter);
+      continue;
+    }*/
+    if (isInsideAabb(*iter)) {
+      for (const auto& voxel : iter->frontier_voxels()) {
+        if (remove_voxel.find(voxel.first) == remove_voxel.end()) {
+          voxel_map[voxel.first] = -1;
+        }
+      }
+      visualization_msgs::Marker frontier_msg;
+      frontier_msg.header.frame_id = "map";
+      frontier_msg.header.stamp = ros::Time();
+      frontier_msg.ns = "frontiers";
+      frontier_msg.id = iter->id();
+      frontier_msg.type = visualization_msgs::Marker::CUBE_LIST;
+      frontier_msg.action = visualization_msgs::Marker::DELETE;
+      frontiers_pub_.publish(frontier_msg);
       iter = frontiers_.erase(iter);
       continue;
     }
-    if (isInsideAabb(*iter)) {
-      local_frontiers.emplace_back(&(*iter));
-    }
     ++iter;
-  }
-  // VLOG(5) << "Local Frontiers size: " << local_frontiers.size();
-
-  for (const auto& voxel : remove_voxel) {
-    for (auto it = local_frontiers.begin(); it != local_frontiers.end(); ++it) {
-      if ((*it)->hasVoxel(voxel)) {
-        if ((*it)->removeVoxel(voxel) < 10) {
-          visualization_msgs::Marker frontier_msg;
-          frontier_msg.header.frame_id = "map";
-          frontier_msg.header.stamp = ros::Time();
-          frontier_msg.ns = "frontiers";
-          frontier_msg.id = (*it)->id();
-          frontier_msg.type = visualization_msgs::Marker::CUBE_LIST;
-          frontier_msg.action = visualization_msgs::Marker::DELETE;
-          frontiers_pub_.publish(frontier_msg);
-
-          local_frontiers.erase(it);
-        }
-        break;
-      }
-    }
   }
 }
 
@@ -220,7 +205,7 @@ void FrontierClustering::serializeFrontierClustersMsg(
 void FrontierClustering::deserializeFrontierVoxelsMsg(
     const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
     voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
-    voxblox::GlobalIndexVector& remove_voxel) {
+    voxblox::LongIndexSet& remove_voxel) {
   voxel_size_ = frontier_voxels->voxel_size;
   voxels_per_side_ = frontier_voxels->voxels_per_side;
 
@@ -236,11 +221,25 @@ void FrontierClustering::deserializeFrontierVoxelsMsg(
     }
     global_index = {fvoxel.index.x, fvoxel.index.y, fvoxel.index.z};
     if (fvoxel.action == 0) {
-      remove_voxel.emplace_back(global_index);
+      remove_voxel.insert(global_index);
     } else {
       voxel_map[global_index] = -1;
     }
   }
+}
+
+bool FrontierClustering::isInsideAabb(const Frontier& frontier) const {
+  voxblox::GlobalIndex f_aabb_min;
+  voxblox::GlobalIndex f_aabb_max;
+  frontier.getAabb(&f_aabb_min, &f_aabb_max);
+  for (size_t i = 0; i < 3; ++i) {
+    if (not((aabb_min_[i] <= f_aabb_min[i] and f_aabb_min[i] <= aabb_max_[i]) or
+            (f_aabb_min[i] <= aabb_min_[i] and
+             aabb_min_[i] <= f_aabb_max[i]))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace frontiers

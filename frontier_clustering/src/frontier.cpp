@@ -10,7 +10,7 @@ Frontier::Frontier(unsigned int id)
     : aabb_min_(INT64_MAX, INT64_MAX, INT64_MAX),
       aabb_max_(INT64_MIN, INT64_MIN, INT64_MIN),
       id_(id),
-      mat_(0, 3) {
+      frontier_voxels_(0, 3) {
   uint64_t timeSeed =
       std::chrono::high_resolution_clock::now().time_since_epoch().count();
   std::seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed >> 32u)};
@@ -21,10 +21,6 @@ Frontier::Frontier(unsigned int id)
   color_.g = uniform(rng);
   color_.b = uniform(rng);
   color_.a = 0.5;
-}
-
-bool Frontier::hasVoxel(const voxblox::GlobalIndex &global_index) const {
-  return frontier_voxels_.find(global_index) != frontier_voxels_.end();
 }
 
 void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
@@ -45,33 +41,10 @@ void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
   }
 }
 
-size_t Frontier::removeVoxel(const voxblox::GlobalIndex &global_index) {
-  frontier_voxels_.erase(global_index);
-  return frontier_voxels_.size();
-  // TODO: Recalculate AABB
-}
-
 void Frontier::getAabb(voxblox::GlobalIndex *aabb_min,
                        voxblox::GlobalIndex *aabb_max) const {
   *aabb_min = aabb_min_;
   *aabb_max = aabb_max_;
-}
-
-bool Frontier::checkIntersectionAabb(const Frontier &frontier) const {
-  for (size_t i = 0; i < 3; ++i) {
-    if (aabb_min_[i] - 1 < frontier.aabb_min_[i] or
-        aabb_max_[i] + 1 > frontier.aabb_max_[i]) {
-      return false;
-    }
-  }
-  for (const auto &voxel : frontier_voxels_) {
-    for (const auto &adj : adjacent) {
-      if (frontier.hasVoxel(voxel.first + adj)) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 }  // namespace frontiers
