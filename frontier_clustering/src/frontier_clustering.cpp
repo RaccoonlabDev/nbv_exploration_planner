@@ -18,7 +18,7 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
   frontiers_aabb_pub_ =
       nh_.advertise<visualization_msgs::Marker>("frontiers_aabb", 100);
   frontier_voxels_sub_ =
-      nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 100,
+      nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
                     &FrontierClustering::insertFrontierVoxels, this);
 
   nh_private_.param("size_threshold", size_threshold_, 10000.0);
@@ -56,10 +56,9 @@ void FrontierClustering::removeOldFrontierVoxels(
   auto iter = frontiers_.begin();
   while (iter != frontiers_.end()) {
     if (isInsideAabb(*iter)) {
-      MatrixX3li tmp_mat = iter->frontier_voxels();
-      for (size_t i = 0; i < tmp_mat.rows(); ++i) {
-        voxblox::GlobalIndex tmp_idx{tmp_mat.row(i).x(), tmp_mat.row(i).y(),
-                                     tmp_mat.row(i).z()};
+      for (size_t i = 0; i < iter->frontier_voxels().rows(); ++i) {
+        auto row = iter->frontier_voxels().row(i);
+        voxblox::GlobalIndex tmp_idx{row.x(), row.y(), row.z()};
         if (remove_voxel.find(tmp_idx) == remove_voxel.end()) {
           voxel_map[tmp_idx] = -1;
         }
@@ -127,9 +126,8 @@ void FrontierClustering::insertNewFrontiersRec(
 
   if (eigen_val > size_threshold_ and
       frontier.frontier_voxels().rows() > min_num_voxels_) {
-    auto eigen_vec = eig.eigenvectors().col(2);
-    Eigen::Vector3d normal{eigen_vec(0, 0), eigen_vec(1, 0), eigen_vec(2, 0)};
-    normal += frontier.mean();
+    Eigen::Vector3d eigen_vec = eig.eigenvectors().col(2);
+    Eigen::Vector3d normal = eigen_vec+frontier.mean();
     normal /= normal.norm();
     double distance = normal.dot(frontier.mean());
     Frontier frontier1(0);

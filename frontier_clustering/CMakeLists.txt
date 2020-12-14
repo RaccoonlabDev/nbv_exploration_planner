@@ -4,7 +4,12 @@ project(frontier_clustering)
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
-add_definitions(-std=c++17)
+add_definitions(-std=c++17)# -DEIGEN_USE_BLAS)
+
+# Blas library
+#find_package( BLAS REQUIRED )
+
+#include_directories(${BLAS_INCLUDE_DIR})
 
 
 #############
@@ -18,7 +23,7 @@ cs_add_library(${PROJECT_NAME}
 cs_add_executable(frontierClustering
         src/frontier_clustering_node.cpp
         )
-target_link_libraries(frontierClustering ${PROJECT_NAME})
+target_link_libraries(frontierClustering ${PROJECT_NAME})# ${BLAS_LIBRARIES})
 
 ##########
 # EXPORT #

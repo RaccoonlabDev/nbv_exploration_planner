@@ -9,7 +9,6 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox_msgs/FrontierVoxels.h>
-#include <boost/dynamic_bitset.hpp>
 
 #include "frontier_clustering/frontier.h"
 

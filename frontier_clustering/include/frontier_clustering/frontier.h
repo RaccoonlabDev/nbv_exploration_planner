@@ -5,6 +5,9 @@
 #ifndef SRC_FRONTIER_H
 #define SRC_FRONTIER_H
 
+#define EIGEN_DONT_VECTORIZE
+#define EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT
+
 #include <std_msgs/ColorRGBA.h>
 #include <voxblox/core/block_hash.h>
 #include <Eigen/Core>

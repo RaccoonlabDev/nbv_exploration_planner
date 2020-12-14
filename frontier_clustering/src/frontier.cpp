@@ -11,10 +11,8 @@ Frontier::Frontier(unsigned int id)
       aabb_max_(INT64_MIN, INT64_MIN, INT64_MIN),
       id_(id),
       frontier_voxels_(0, 3) {
-  uint64_t timeSeed =
-      std::chrono::high_resolution_clock::now().time_since_epoch().count();
-  std::seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed >> 32u)};
-  std::mt19937_64 rng(ss);
+  std::mt19937_64 rng(
+      std::chrono::steady_clock::now().time_since_epoch().count());
   std::uniform_real_distribution<double> uniform(0, 1);
 
   color_.r = uniform(rng);
@@ -58,7 +56,7 @@ void Frontier::addVoxel(const Eigen::Matrix<int64_t, 1, 3> &global_index) {
 }
 
 void Frontier::setMean() {
-  auto mean = frontier_voxels_.colwise().mean();
+  auto mean = frontier_voxels_.colwise().mean().cast<double>();
   mean_ = {mean.x(), mean.y(), mean.z()};
 }
 
