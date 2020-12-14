@@ -1,10 +1,12 @@
 <launch>
     <arg name="size_threshold" default="50000"/>
+    <arg name="min_num_voxels" default="10"/>
     <arg name="param_file" default="$(find nbveplanner)/resource/exploration_indoor.yaml"/>
 
     <node name="frontierClustering" pkg="frontier_clustering" type="frontierClustering" output="screen"
-          args="-alsologtostderr --v=0">
+          args="-alsologtostderr --v=0" launch-prefix="gdb -ex run --args">
         <param name="size_threshold" type="double" value="$(arg size_threshold)"/>
+        <param name="min_num_voxels" type="int" value="$(arg min_num_voxels)"/>
         <rosparam command="load" file="$(arg param_file)"/>
     </node>
 </launch>

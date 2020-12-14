@@ -12,12 +12,13 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
       nh_private_(nh_private),
       id_counter_(0),
       bbx_min_(0, 0, 0),
-      bbx_max_(0, 0, 0) {
+      bbx_max_(0, 0, 0),
+      min_num_voxels_(10) {
   frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 100);
   frontiers_aabb_pub_ =
       nh_.advertise<visualization_msgs::Marker>("frontiers_aabb", 100);
   frontier_voxels_sub_ =
-      nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
+      nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 100,
                     &FrontierClustering::insertFrontierVoxels, this);
 
   nh_private_.param("size_threshold", size_threshold_, 10000.0);
@@ -27,6 +28,8 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
   nh_private_.param("bbx/maxX", bbx_max_.x(), bbx_max_.x());
   nh_private_.param("bbx/maxY", bbx_max_.y(), bbx_max_.y());
   nh_private_.param("bbx/maxZ", bbx_max_.z(), bbx_max_.z());
+
+  nh_private_.param("min_num_voxels", min_num_voxels_, min_num_voxels_);
 
   ROS_INFO("All set! Spinning...");
 }
@@ -44,8 +47,6 @@ void FrontierClustering::insertFrontierVoxels(
   voxblox::AlignedList<Frontier*> local_frontiers;
   // Cluster new frontiers inside the updated area
   clusterNewFrontiers(local_frontiers, voxel_map);
-  // Serialize and publish the visualization of the new frontier clusters
-  serializeFrontierClustersMsg(local_frontiers);
 }
 
 void FrontierClustering::removeOldFrontierVoxels(
@@ -54,14 +55,13 @@ void FrontierClustering::removeOldFrontierVoxels(
   // Select frontiers inside AABB of the msg
   auto iter = frontiers_.begin();
   while (iter != frontiers_.end()) {
-    /*if (iter->size() < 10) {
-      iter = frontiers_.erase(iter);
-      continue;
-    }*/
     if (isInsideAabb(*iter)) {
-      for (const auto& voxel : iter->frontier_voxels()) {
-        if (remove_voxel.find(voxel.first) == remove_voxel.end()) {
-          voxel_map[voxel.first] = -1;
+      MatrixX3li tmp_mat = iter->frontier_voxels();
+      for (size_t i = 0; i < tmp_mat.rows(); ++i) {
+        voxblox::GlobalIndex tmp_idx{tmp_mat.row(i).x(), tmp_mat.row(i).y(),
+                                     tmp_mat.row(i).z()};
+        if (remove_voxel.find(tmp_idx) == remove_voxel.end()) {
+          voxel_map[tmp_idx] = -1;
         }
       }
       visualization_msgs::Marker frontier_msg;
@@ -88,26 +88,8 @@ void FrontierClustering::clusterNewFrontiers(
       clusterNewFrontiersRec(voxel_map, frontiers_tmp, frontiers_tmp.size(),
                              it);
     }
-    // Merge the new frontiers with the existing ones
-    /*bool merged;
     for (auto& f_tmp : frontiers_tmp) {
-      merged = false;
-      for (auto& frontier : local_frontiers) {
-        if (f_tmp.checkIntersectionAabb(*frontier)) {
-          frontier->addFrontier(f_tmp.frontier_voxels());
-          merged = true;
-          break;
-        }
-      }
-      if (not merged) {
-        f_tmp.setId(id_counter_);
-        ++id_counter_;
-        frontiers_.emplace_back(f_tmp);
-        local_frontiers.emplace_back(&frontiers_.back());
-      }
-    }*/
-    for (auto& f_tmp : frontiers_tmp) {
-      if (f_tmp.size() > 10) {
+      if (f_tmp.frontier_voxels().rows() > min_num_voxels_) {
         insertNewFrontiersRec(f_tmp, local_frontiers);
       }
     }
@@ -136,27 +118,28 @@ void FrontierClustering::clusterNewFrontiersRec(
 
 void FrontierClustering::insertNewFrontiersRec(
     Frontier& frontier, voxblox::AlignedList<Frontier*>& local_frontiers) {
-  auto mean = frontier.mat().colwise().mean();
-  MatrixX3d centered = frontier.mat().rowwise() - mean;
+  frontier.setMean();
+  MatrixX3d centered = frontier.frontier_voxels().cast<double>().rowwise() -
+                       frontier.mean().transpose();
   MatrixX3d cov = centered.adjoint() * centered;
   Eigen::SelfAdjointEigenSolver<MatrixX3d> eig(cov);
   double eigen_val = eig.eigenvalues()[2];
 
-  if (eigen_val > size_threshold_) {
+  if (eigen_val > size_threshold_ and
+      frontier.frontier_voxels().rows() > min_num_voxels_) {
     auto eigen_vec = eig.eigenvectors().col(2);
-    Eigen::Vector3d normal{eigen_vec(0, 0) + mean.x(),
-                           eigen_vec(1, 0) + mean.y(),
-                           eigen_vec(2, 0) + mean.z()};
-    normal = normal / normal.norm();
-    double distance = normal.dot(mean);
+    Eigen::Vector3d normal{eigen_vec(0, 0), eigen_vec(1, 0), eigen_vec(2, 0)};
+    normal += frontier.mean();
+    normal /= normal.norm();
+    double distance = normal.dot(frontier.mean());
     Frontier frontier1(0);
     Frontier frontier2(0);
-    for (const auto& voxel : frontier.frontier_voxels()) {
-      auto row = frontier.mat().row(voxel.second);
-      if (normal.dot(row) >= distance) {
-        frontier1.addVoxel(voxel.first);
+    for (size_t i = 0; i < frontier.frontier_voxels().rows(); ++i) {
+      Eigen::Matrix<int64_t, 3, 1> row = frontier.frontier_voxels().row(i);
+      if (normal.dot(row.cast<double>()) >= distance) {
+        frontier1.addVoxel(row);
       } else {
-        frontier2.addVoxel(voxel.first);
+        frontier2.addVoxel(row);
       }
     }
     insertNewFrontiersRec(frontier1, local_frontiers);
@@ -166,40 +149,36 @@ void FrontierClustering::insertNewFrontiersRec(
     ++id_counter_;
     frontiers_.emplace_back(frontier);
     local_frontiers.emplace_back(&frontiers_.back());
+    serializeFrontierClustersMsg(frontier);
   }
 }
 
-void FrontierClustering::serializeFrontierClustersMsg(
-    voxblox::AlignedList<Frontier*>& local_frontiers) {
-  for (const auto& frontier : local_frontiers) {
-    visualization_msgs::Marker frontier_msg;
-    frontier_msg.header.frame_id = "map";
-    frontier_msg.header.stamp = ros::Time();
-    frontier_msg.ns = "frontiers";
-    frontier_msg.id = frontier->id();
-    frontier_msg.type = visualization_msgs::Marker::CUBE_LIST;
-    frontier_msg.action = visualization_msgs::Marker::ADD;
-    frontier_msg.pose.orientation.x = 0.0;
-    frontier_msg.pose.orientation.y = 0.0;
-    frontier_msg.pose.orientation.z = 0.0;
-    frontier_msg.pose.orientation.w = 1.0;
-    frontier_msg.color = frontier->color();
-    frontier_msg.scale.x = voxel_size_;
-    frontier_msg.scale.y = voxel_size_;
-    frontier_msg.scale.z = voxel_size_;
-    frontier_msg.points.reserve(frontier->size());
-    geometry_msgs::Point p;
-    for (const auto& voxel : frontier->frontier_voxels()) {
-      p.x = (static_cast<voxblox::FloatingPoint>(voxel.first.x()) + 0.5) *
-            voxel_size_;
-      p.y = (static_cast<voxblox::FloatingPoint>(voxel.first.y()) + 0.5) *
-            voxel_size_;
-      p.z = (static_cast<voxblox::FloatingPoint>(voxel.first.z()) + 0.5) *
-            voxel_size_;
-      frontier_msg.points.emplace_back(p);
-    }
-    frontiers_pub_.publish(frontier_msg);
+void FrontierClustering::serializeFrontierClustersMsg(Frontier& frontier) {
+  visualization_msgs::Marker frontier_msg;
+  frontier_msg.header.frame_id = "map";
+  frontier_msg.header.stamp = ros::Time();
+  frontier_msg.ns = "frontiers";
+  frontier_msg.id = frontier.id();
+  frontier_msg.type = visualization_msgs::Marker::CUBE_LIST;
+  frontier_msg.action = visualization_msgs::Marker::ADD;
+  frontier_msg.pose.orientation.x = 0.0;
+  frontier_msg.pose.orientation.y = 0.0;
+  frontier_msg.pose.orientation.z = 0.0;
+  frontier_msg.pose.orientation.w = 1.0;
+  frontier_msg.color = frontier.color();
+  frontier_msg.scale.x = voxel_size_;
+  frontier_msg.scale.y = voxel_size_;
+  frontier_msg.scale.z = voxel_size_;
+  frontier_msg.points.reserve(frontier.frontier_voxels().rows());
+  geometry_msgs::Point p;
+  for (size_t i = 0; i < frontier.frontier_voxels().rows(); ++i) {
+    auto voxel = frontier.frontier_voxels().row(i);
+    p.x = (static_cast<voxblox::FloatingPoint>(voxel.x()) + 0.5) * voxel_size_;
+    p.y = (static_cast<voxblox::FloatingPoint>(voxel.y()) + 0.5) * voxel_size_;
+    p.z = (static_cast<voxblox::FloatingPoint>(voxel.z()) + 0.5) * voxel_size_;
+    frontier_msg.points.emplace_back(p);
   }
+  frontiers_pub_.publish(frontier_msg);
 }
 
 void FrontierClustering::deserializeFrontierVoxelsMsg(

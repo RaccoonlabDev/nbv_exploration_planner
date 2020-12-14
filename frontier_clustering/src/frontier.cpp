@@ -24,12 +24,13 @@ Frontier::Frontier(unsigned int id)
 }
 
 void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
-  frontier_voxels_[global_index] = mat_.rows();
+  // frontier_voxels_[global_index] = frontier_voxels_.rows();
   // frontier_voxels_.insert(global_index);
-  mat_.conservativeResize(mat_.rows() + 1, Eigen::NoChange_t());
-  mat_.row(mat_.rows() - 1) << static_cast<double>(global_index.x()),
-      static_cast<double>(global_index.y()),
-      static_cast<double>(global_index.z());
+  frontier_voxels_.conservativeResize(frontier_voxels_.rows() + 1,
+                                      Eigen::NoChange_t());
+
+  frontier_voxels_.row(frontier_voxels_.rows() - 1) << global_index.x(),
+      global_index.y(), global_index.z();
 
   for (size_t i = 0; i < 3; ++i) {
     if (global_index[i] < aabb_min_[i]) {
@@ -39,6 +40,26 @@ void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
       aabb_max_[i] = global_index[i];
     }
   }
+}
+
+void Frontier::addVoxel(const Eigen::Matrix<int64_t, 1, 3> &global_index) {
+  frontier_voxels_.conservativeResize(frontier_voxels_.rows() + 1,
+                                      Eigen::NoChange_t());
+  frontier_voxels_.row(frontier_voxels_.rows() - 1) = global_index;
+
+  for (size_t i = 0; i < 3; ++i) {
+    if (global_index(0, i) < aabb_min_[i]) {
+      aabb_min_[i] = global_index(0, i);
+    }
+    if (global_index(0, i) > aabb_max_[i]) {
+      aabb_max_[i] = global_index(0, i);
+    }
+  }
+}
+
+void Frontier::setMean() {
+  auto mean = frontier_voxels_.colwise().mean();
+  mean_ = {mean.x(), mean.y(), mean.z()};
 }
 
 void Frontier::getAabb(voxblox::GlobalIndex *aabb_min,

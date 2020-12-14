@@ -65,8 +65,7 @@ class FrontierClustering {
     return true;
   }
 
-  void serializeFrontierClustersMsg(
-      voxblox::AlignedList<Frontier*>& local_frontiers);
+  void serializeFrontierClustersMsg(Frontier& frontier);
 
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
@@ -74,6 +73,7 @@ class FrontierClustering {
   double voxel_size_;
   double voxels_per_side_;
   double size_threshold_;
+  int min_num_voxels_;
 
   Eigen::Vector3d bbx_min_;
   Eigen::Vector3d bbx_max_;
