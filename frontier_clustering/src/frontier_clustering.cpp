@@ -11,8 +11,9 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
     : nh_(nh),
       nh_private_(nh_private),
       id_counter_(0),
-      bbx_min_(0, 0, 0),
-      bbx_max_(0, 0, 0),
+      bbx_min_(-4, -1, 0),
+      bbx_max_(10, 14, 3),
+      size_threshold_(20000),
       min_num_voxels_(10) {
   frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 100);
   frontiers_aabb_pub_ =
@@ -21,7 +22,7 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
       nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
                     &FrontierClustering::insertFrontierVoxels, this);
 
-  nh_private_.param("size_threshold", size_threshold_, 10000.0);
+  nh_private_.param("size_threshold", size_threshold_, size_threshold_);
   nh_private_.param("bbx/minX", bbx_min_.x(), bbx_min_.x());
   nh_private_.param("bbx/minY", bbx_min_.y(), bbx_min_.y());
   nh_private_.param("bbx/minZ", bbx_min_.z(), bbx_min_.z());
@@ -107,7 +108,6 @@ void FrontierClustering::clusterNewFrontiersRec(
       frontiers_tmp.emplace_back(Frontier(0));
     }
     frontiers_tmp[cluster].addVoxel(it->first);
-
     for (const auto& adj : adjacent) {
       clusterNewFrontiersRec(voxel_map, frontiers_tmp, cluster,
                              voxel_map.find(it->first + adj));
@@ -121,13 +121,24 @@ void FrontierClustering::insertNewFrontiersRec(
   MatrixX3d centered = frontier.frontier_voxels().cast<double>().rowwise() -
                        frontier.mean().transpose();
   MatrixX3d cov = centered.adjoint() * centered;
+
+  /*MatrixX3d cov =
+      (centered.transpose() * centered) *
+      (1.0 / (static_cast<double>(frontier.frontier_voxels().rows()) - 1.0));*/
   Eigen::SelfAdjointEigenSolver<MatrixX3d> eig(cov);
+  // Eigen::EigenSolver<MatrixX3d> eig(cov);
   double eigen_val = eig.eigenvalues()[2];
 
-  if (eigen_val > size_threshold_ and
-      frontier.frontier_voxels().rows() > min_num_voxels_) {
+  /*size_t index;
+  for (size_t i = 1; i < eig.eigenvalues().size(); ++i) {
+    if (eig.eigenvalues()[i].real() > eigen_val) {
+      eigen_val = eig.eigenvalues()[i].real();
+      index = i;
+    }
+  }*/
+  if (eigen_val > size_threshold_) {
     Eigen::Vector3d eigen_vec = eig.eigenvectors().col(2);
-    Eigen::Vector3d normal = eigen_vec+frontier.mean();
+    Eigen::Vector3d normal = eigen_vec + frontier.mean();
     normal /= normal.norm();
     double distance = normal.dot(frontier.mean());
     Frontier frontier1(0);

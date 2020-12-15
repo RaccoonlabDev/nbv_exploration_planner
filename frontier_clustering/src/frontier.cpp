@@ -56,7 +56,7 @@ void Frontier::addVoxel(const Eigen::Matrix<int64_t, 1, 3> &global_index) {
 }
 
 void Frontier::setMean() {
-  auto mean = frontier_voxels_.colwise().mean().cast<double>();
+  auto mean = frontier_voxels_.cast<double>().colwise().mean();
   mean_ = {mean.x(), mean.y(), mean.z()};
 }
 
