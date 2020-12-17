@@ -5,19 +5,16 @@
 #ifndef SRC_FRONTIER_H
 #define SRC_FRONTIER_H
 
-#define EIGEN_DONT_VECTORIZE
-#define EIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT
-
+#include <frontier_clustering/camera_model.h>
+#include <frontier_clustering/common.h>
 #include <std_msgs/ColorRGBA.h>
 #include <voxblox/core/block_hash.h>
-#include <Eigen/Core>
+#include <thread>
+
 #include <chrono>
 #include <random>
 
 namespace frontiers {
-
-typedef Eigen::Matrix<double, Eigen::Dynamic, 3> MatrixX3d;
-typedef Eigen::Matrix<int64_t, Eigen::Dynamic, 3> MatrixX3li;
 
 static const voxblox::GlobalIndexVector adjacent{
     voxblox::GlobalIndex{1, 0, 0},  voxblox::GlobalIndex{-1, 0, 0},
@@ -52,12 +49,13 @@ class Frontier {
 
   void addVoxel(const voxblox::GlobalIndex& global_index);
 
-  void addVoxel(const Eigen::Matrix<int64_t, 1, 3>& global_index);
-
   const std_msgs::ColorRGBA& color() const { return color_; }
 
   void getAabb(voxblox::GlobalIndex* aabb_min,
                voxblox::GlobalIndex* aabb_max) const;
+
+  void generateViewpoints(const CameraModel& camera,
+                          const size_t& max_num_threads);
 
  private:
   MatrixX3li frontier_voxels_;

@@ -5,7 +5,12 @@
 #ifndef SRC_FRONTIER_CLUSTERING_H
 #define SRC_FRONTIER_CLUSTERING_H
 
+#include <frontier_clustering/params.h>
+#include <frontier_clustering/voxblox_manager.h>
+#include <minkindr_conversions/kindr_tf.h>
 #include <ros/ros.h>
+#include <tf/tf.h>
+#include <tf/transform_listener.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox_msgs/FrontierVoxels.h>
@@ -24,6 +29,8 @@ class FrontierClustering {
                      const ros::NodeHandle& nh_private);
 
   virtual ~FrontierClustering() = default;
+
+  void setUpCamera();
 
   void insertFrontierVoxels(
       const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels);
@@ -53,8 +60,8 @@ class FrontierClustering {
       voxblox::LongIndexSet& remove_voxel);
 
   inline bool isInsideBbx(const voxblox_msgs::Index& voxel) const {
-    static Eigen::Vector3d bbx_min = bbx_min_ / voxel_size_;
-    static Eigen::Vector3d bbx_max = bbx_max_ / voxel_size_;
+    static Eigen::Vector3d bbx_min = params_.bbx_min_ / params_.voxel_size_;
+    static Eigen::Vector3d bbx_max = params_.bbx_max_ / params_.voxel_size_;
 
     if (voxel.x < bbx_min.x() or voxel.x > bbx_max.x() or
         voxel.y < bbx_min.y() or voxel.y > bbx_max.y() or
@@ -69,25 +76,20 @@ class FrontierClustering {
   ros::NodeHandle nh_;
   ros::NodeHandle nh_private_;
 
-  double voxel_size_;
-  double voxels_per_side_;
-  double size_threshold_;
-  int min_num_voxels_;
-
-  Eigen::Vector3d bbx_min_;
-  Eigen::Vector3d bbx_max_;
-
   voxblox::GlobalIndex aabb_min_;
   voxblox::GlobalIndex aabb_max_;
 
   unsigned int id_counter_;
 
   ros::Publisher frontiers_pub_;
-  ros::Publisher frontiers_aabb_pub_;
 
   ros::Subscriber frontier_voxels_sub_;
 
   Frontiers frontiers_;
+
+  Params params_;
+  CameraModel camera_;
+  HighResManager manager_;
 };
 
 }  // namespace frontiers

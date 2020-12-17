@@ -22,8 +22,6 @@ Frontier::Frontier(unsigned int id)
 }
 
 void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
-  // frontier_voxels_[global_index] = frontier_voxels_.rows();
-  // frontier_voxels_.insert(global_index);
   frontier_voxels_.conservativeResize(frontier_voxels_.rows() + 1,
                                       Eigen::NoChange_t());
 
@@ -40,21 +38,6 @@ void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {
   }
 }
 
-void Frontier::addVoxel(const Eigen::Matrix<int64_t, 1, 3> &global_index) {
-  frontier_voxels_.conservativeResize(frontier_voxels_.rows() + 1,
-                                      Eigen::NoChange_t());
-  frontier_voxels_.row(frontier_voxels_.rows() - 1) = global_index;
-
-  for (size_t i = 0; i < 3; ++i) {
-    if (global_index(0, i) < aabb_min_[i]) {
-      aabb_min_[i] = global_index(0, i);
-    }
-    if (global_index(0, i) > aabb_max_[i]) {
-      aabb_max_[i] = global_index(0, i);
-    }
-  }
-}
-
 void Frontier::setMean() {
   auto mean = frontier_voxels_.cast<double>().colwise().mean();
   mean_ = {mean.x(), mean.y(), mean.z()};
@@ -64,6 +47,23 @@ void Frontier::getAabb(voxblox::GlobalIndex *aabb_min,
                        voxblox::GlobalIndex *aabb_max) const {
   *aabb_min = aabb_min_;
   *aabb_max = aabb_max_;
+}
+
+void Frontier::generateViewpoints(const CameraModel &camera,
+                                  const size_t &max_num_threads) {
+  /*std::unique_ptr<ThreadSafeIndex> index_getter(
+      ThreadSafeIndexFactory::get(config_.integration_order_mode, points_C));
+
+  std::list<std::thread> integration_threads;
+  for (size_t i = 0; i <max_num_threads; ++i) {
+    integration_threads.emplace_back(&SimpleTsdfIntegrator::integrateFunction,
+                                     this, T_G_C, points_C, colors,
+                                     freespace_points, index_getter.get());
+  }
+
+  for (std::thread &thread : integration_threads) {
+    thread.join();
+  }*/
 }
 
 }  // namespace frontiers

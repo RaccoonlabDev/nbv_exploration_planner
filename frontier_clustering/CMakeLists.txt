@@ -16,6 +16,9 @@ add_definitions(-std=c++17)# -DEIGEN_USE_BLAS)
 # LIBRARIES #
 #############
 cs_add_library(${PROJECT_NAME}
+        src/viewpoints.cpp
+        src/voxblox_manager.cpp
+        src/camera_model.cpp
         src/frontier.cpp
         src/frontier_clustering.cpp
         )

@@ -3,6 +3,7 @@
 //
 
 #include "frontier_clustering/frontier_clustering.h"
+#include <thread>
 
 namespace frontiers {
 
@@ -11,28 +12,41 @@ FrontierClustering::FrontierClustering(const ros::NodeHandle& nh,
     : nh_(nh),
       nh_private_(nh_private),
       id_counter_(0),
-      bbx_min_(-4, -1, 0),
-      bbx_max_(10, 14, 3),
-      size_threshold_(20000),
-      min_num_voxels_(10) {
+      manager_(nh_, nh_private_, &params_) {
   frontiers_pub_ = nh_.advertise<visualization_msgs::Marker>("frontiers", 100);
-  frontiers_aabb_pub_ =
-      nh_.advertise<visualization_msgs::Marker>("frontiers_aabb", 100);
+
   frontier_voxels_sub_ =
-      nh_.subscribe("/iris/nbvePlanner/frontier_voxels", 10,
+      nh_.subscribe("/frontierClustering/frontier_voxels", 10,
                     &FrontierClustering::insertFrontierVoxels, this);
 
-  nh_private_.param("size_threshold", size_threshold_, size_threshold_);
-  nh_private_.param("bbx/minX", bbx_min_.x(), bbx_min_.x());
-  nh_private_.param("bbx/minY", bbx_min_.y(), bbx_min_.y());
-  nh_private_.param("bbx/minZ", bbx_min_.z(), bbx_min_.z());
-  nh_private_.param("bbx/maxX", bbx_max_.x(), bbx_max_.x());
-  nh_private_.param("bbx/maxY", bbx_max_.y(), bbx_max_.y());
-  nh_private_.param("bbx/maxZ", bbx_max_.z(), bbx_max_.z());
-
-  nh_private_.param("min_num_voxels", min_num_voxels_, min_num_voxels_);
+  params_.setParametersFromRos(nh_private_);
+  setUpCamera();
 
   ROS_INFO("All set! Spinning...");
+}
+
+void FrontierClustering::setUpCamera() {
+  // Set camera FOV
+  camera_.setIntrinsicsFromFoV(params_.camera_hfov_, params_.camera_vfov_,
+                               params_.sensor_min_range_,
+                               params_.sensor_max_range_);
+  // Set Boundaries of Exploration
+  camera_.setBoundingBox(params_.bbx_min_, params_.bbx_max_);
+  // Set camera frame transformation
+  static tf::TransformListener listener;
+  tf::StampedTransform stamped_transform;
+
+  try {
+    listener.waitForTransform(params_.camera_frame_, "base_link",
+                              ros::Time::now(), ros::Duration(3.0));
+    listener.lookupTransform(params_.camera_frame_, "base_link", ros::Time(0),
+                             stamped_transform);
+  } catch (tf::TransformException& ex) {
+    ROS_WARN("%s", ex.what());
+  }
+  Transformation T_C_B;
+  tf::transformTFToKindr(stamped_transform, &T_C_B);
+  camera_.setExtrinsics(T_C_B);
 }
 
 void FrontierClustering::insertFrontierVoxels(
@@ -89,7 +103,7 @@ void FrontierClustering::clusterNewFrontiers(
                              it);
     }
     for (auto& f_tmp : frontiers_tmp) {
-      if (f_tmp.frontier_voxels().rows() > min_num_voxels_) {
+      if (f_tmp.frontier_voxels().rows() > params_.min_num_voxels_) {
         insertNewFrontiersRec(f_tmp, local_frontiers);
       }
     }
@@ -122,21 +136,10 @@ void FrontierClustering::insertNewFrontiersRec(
                        frontier.mean().transpose();
   MatrixX3d cov = centered.adjoint() * centered;
 
-  /*MatrixX3d cov =
-      (centered.transpose() * centered) *
-      (1.0 / (static_cast<double>(frontier.frontier_voxels().rows()) - 1.0));*/
   Eigen::SelfAdjointEigenSolver<MatrixX3d> eig(cov);
-  // Eigen::EigenSolver<MatrixX3d> eig(cov);
   double eigen_val = eig.eigenvalues()[2];
 
-  /*size_t index;
-  for (size_t i = 1; i < eig.eigenvalues().size(); ++i) {
-    if (eig.eigenvalues()[i].real() > eigen_val) {
-      eigen_val = eig.eigenvalues()[i].real();
-      index = i;
-    }
-  }*/
-  if (eigen_val > size_threshold_) {
+  if (eigen_val > params_.size_threshold_) {
     Eigen::Vector3d eigen_vec = eig.eigenvectors().col(2);
     Eigen::Vector3d normal = eigen_vec + frontier.mean();
     normal /= normal.norm();
@@ -151,6 +154,12 @@ void FrontierClustering::insertNewFrontiersRec(
         frontier2.addVoxel(row);
       }
     }
+    /*std::thread t1(&FrontierClustering::insertNewFrontiersRec, this,
+                   std::ref(frontier1), std::ref(local_frontiers));
+    std::thread t2(&FrontierClustering::insertNewFrontiersRec, this,
+                   std::ref(frontier2), std::ref(local_frontiers));
+    t1.join();
+    t2.join();*/
     insertNewFrontiersRec(frontier1, local_frontiers);
     insertNewFrontiersRec(frontier2, local_frontiers);
   } else {
@@ -175,16 +184,19 @@ void FrontierClustering::serializeFrontierClustersMsg(Frontier& frontier) {
   frontier_msg.pose.orientation.z = 0.0;
   frontier_msg.pose.orientation.w = 1.0;
   frontier_msg.color = frontier.color();
-  frontier_msg.scale.x = voxel_size_;
-  frontier_msg.scale.y = voxel_size_;
-  frontier_msg.scale.z = voxel_size_;
+  frontier_msg.scale.x = params_.voxel_size_;
+  frontier_msg.scale.y = params_.voxel_size_;
+  frontier_msg.scale.z = params_.voxel_size_;
   frontier_msg.points.reserve(frontier.frontier_voxels().rows());
   geometry_msgs::Point p;
   for (size_t i = 0; i < frontier.frontier_voxels().rows(); ++i) {
     auto voxel = frontier.frontier_voxels().row(i);
-    p.x = (static_cast<voxblox::FloatingPoint>(voxel.x()) + 0.5) * voxel_size_;
-    p.y = (static_cast<voxblox::FloatingPoint>(voxel.y()) + 0.5) * voxel_size_;
-    p.z = (static_cast<voxblox::FloatingPoint>(voxel.z()) + 0.5) * voxel_size_;
+    p.x = (static_cast<voxblox::FloatingPoint>(voxel.x()) + 0.5) *
+          params_.voxel_size_;
+    p.y = (static_cast<voxblox::FloatingPoint>(voxel.y()) + 0.5) *
+          params_.voxel_size_;
+    p.z = (static_cast<voxblox::FloatingPoint>(voxel.z()) + 0.5) *
+          params_.voxel_size_;
     frontier_msg.points.emplace_back(p);
   }
   frontiers_pub_.publish(frontier_msg);
@@ -194,9 +206,6 @@ void FrontierClustering::deserializeFrontierVoxelsMsg(
     const voxblox_msgs::FrontierVoxels::Ptr& frontier_voxels,
     voxblox::LongIndexHashMapType<size_t>::type& voxel_map,
     voxblox::LongIndexSet& remove_voxel) {
-  voxel_size_ = frontier_voxels->voxel_size;
-  voxels_per_side_ = frontier_voxels->voxels_per_side;
-
   aabb_min_ = {frontier_voxels->aabb_min.x, frontier_voxels->aabb_min.y,
                frontier_voxels->aabb_min.z};
   aabb_max_ = {frontier_voxels->aabb_max.x, frontier_voxels->aabb_max.y,

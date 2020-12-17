@@ -1,0 +1,15 @@
+system/v_max: 1.0
+system/dyaw_max: 0.75
+system/camera/pitch: 0.0
+system/camera/hfov: 69.0
+system/camera/vfov: 42.0
+system/robot_radius: 0.4
+
+bbx/maxX: 10.0
+bbx/minX: -4.0
+
+bbx/maxY: 14.0
+bbx/minY: -1.0
+
+bbx/maxZ: 3.0
+bbx/minZ: 0.0
