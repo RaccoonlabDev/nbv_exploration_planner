@@ -133,7 +133,7 @@ void EsdfIntegrator::updateFrontiers(const Block<TsdfVoxel>::Ptr& tsdf_block,
       tsdf_block->block_index(), voxel_index, tsdf_layer_->voxels_per_side());
   TsdfVoxel current_voxel = tsdf_block->getVoxelByLinearIndex(lin_index);
   // If the voxel is free look up if its a frontier, by checking the adjacent
-  if (current_voxel.weight > 1e-1 and current_voxel.distance > 0) {
+  if (current_voxel.distance >= voxel_size_) {
     bool is_frontier = false;
     GlobalIndex adj_global_idx;
     for (const auto& adj : adjacent) {

@@ -19,6 +19,9 @@ Frontier::Frontier(unsigned int id)
   color_.g = uniform(rng);
   color_.b = uniform(rng);
   color_.a = 0.5;
+
+  // TODO: Add it as a param in the roslaunch
+  viewpoints_.reserve(15);
 }
 
 void Frontier::addVoxel(const voxblox::GlobalIndex &global_index) {

@@ -13,6 +13,7 @@ typedef Eigen::Vector4d Pose;
 typedef Eigen::Matrix<double, Eigen::Dynamic, 3> MatrixX3d;
 typedef Eigen::Matrix<int64_t, Eigen::Dynamic, 3> MatrixX3li;
 typedef kindr::minimal::QuatTransformationTemplate<double> Transformation;
+typedef Eigen::Matrix<int64_t , 3, 1> GlobalIndex;
 
 template <typename Type>
 using AlignedVector = std::vector<Type, Eigen::aligned_allocator<Type>>;

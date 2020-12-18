@@ -6,6 +6,7 @@
 #define SRC_FRONTIER_CLUSTERING_H
 
 #include <frontier_clustering/params.h>
+#include <frontier_clustering/viewpoints.h>
 #include <frontier_clustering/voxblox_manager.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <ros/ros.h>
@@ -14,7 +15,6 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox_msgs/FrontierVoxels.h>
-
 #include "frontier_clustering/frontier.h"
 
 namespace frontiers {
@@ -71,6 +71,8 @@ class FrontierClustering {
     return true;
   }
 
+  void sampleViewpoints(const Point& center);
+
   void serializeFrontierClustersMsg(Frontier& frontier);
 
   ros::NodeHandle nh_;
@@ -90,6 +92,7 @@ class FrontierClustering {
   Params params_;
   CameraModel camera_;
   HighResManager manager_;
+  Viewpoints viewpoints_;
 };
 
 }  // namespace frontiers

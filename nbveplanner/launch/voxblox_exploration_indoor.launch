@@ -57,6 +57,7 @@
 
             <param name="publish_tsdf_map" value="false"/>
             <param name="publish_esdf_map" value="false"/>
+            <param name="update_esdf_every_n_sec" value="0.1"/>
             <param name="update_mesh_every_n_sec" value="0.15"/>
 
             <param name="method" value="$(arg method)"/>

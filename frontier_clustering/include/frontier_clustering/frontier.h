@@ -63,6 +63,7 @@ class Frontier {
   std_msgs::ColorRGBA color_;
 
   Eigen::Vector3d mean_;
+  AlignedVector<Pose> viewpoints_;
 
   voxblox::GlobalIndex aabb_min_;
   voxblox::GlobalIndex aabb_max_;

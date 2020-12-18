@@ -1,6 +1,9 @@
 <launch>
     <arg name="size_threshold" default="50000"/>
     <arg name="min_num_voxels" default="20"/>
+    <arg name="h_cylinder" default="4.0"/>
+    <arg name="radius_cylinder" default="4.0"/>
+    <arg name="num_viewpoints" default="50"/>
     <arg name="tf_frame" default="map"/>
     <arg name="camera_frame" default="camera"/>
     <arg name="pcl_topic" default="/r200/depth/points"/>
@@ -15,6 +18,9 @@
           args="-alsologtostderr --v=0">
         <param name="size_threshold" type="double" value="$(arg size_threshold)"/>
         <param name="min_num_voxels" type="int" value="$(arg min_num_voxels)"/>
+        <param name="h_cylinder" type="double" value="$(arg h_cylinder)"/>
+        <param name="radius_cylinder" type="double" value="$(arg radius_cylinder)"/>
+        <param name="num_viewpoints" type="int" value="$(arg num_viewpoints)"/>
         <param name="tf_frame" type="string" value="$(arg tf_frame)"/>
         <param name="camera_frame" type="string" value="$(arg camera_frame)"/>
         <param name="sensor_max_range" type="double" value="$(arg sensor_max_range)"/>

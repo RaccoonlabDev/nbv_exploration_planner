@@ -89,6 +89,8 @@ class ThreadSafeIndexFactory {
  public:
   static ThreadSafeIndex* get(const std::string& mode,
                               const Pointcloud& points_C);
+
+  static ThreadSafeIndex* get(const size_t& size_array);
 };
 
 /**

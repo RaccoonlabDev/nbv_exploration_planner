@@ -83,6 +83,8 @@ class HighResManager : public VoxbloxManager {
 
   VoxelStatus getVoxelStatus(const Point &position) const override;
 
+  VoxelStatus checkCollisionWithRobotAtVoxel(const Point &position) const;
+
   bool checkCollisionWithRobotAtVoxel(const voxblox::GlobalIndex &global_index,
                                       bool is_unknown_collision) const;
 

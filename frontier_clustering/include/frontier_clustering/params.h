@@ -28,7 +28,10 @@ struct Params {
         size_threshold_(50000),
         min_num_voxels_(10),
         voxel_size_(0.1),
-        voxels_per_side_(16) {}
+        voxels_per_side_(16),
+        h_cylinder_(4.0),
+        radius_cylinder_(4.0),
+        num_viewpoints_(30) {}
 
   void setParametersFromRos(const ros::NodeHandle& nh) {
     nh.param("system/v_max", v_max_, v_max_);
@@ -75,6 +78,13 @@ struct Params {
     VLOG(5) << "voxel_size: " << voxel_size_;
     nh.param("voxels_per_side", voxels_per_side_, voxels_per_side_);
     VLOG(5) << "voxels_per_side: " << voxels_per_side_;
+
+    nh.param("h_cylinder", h_cylinder_, h_cylinder_);
+    VLOG(5) << "h_cylinder: " << h_cylinder_;
+    nh.param("radius_cylinder", radius_cylinder_, radius_cylinder_);
+    VLOG(5) << "radius_cylinder: " << radius_cylinder_;
+    nh.param("num_viewpoints", num_viewpoints_, num_viewpoints_);
+    VLOG(5) << "num_viewpoints: " << num_viewpoints_;
   }
 
   double robot_radius_;
@@ -97,6 +107,10 @@ struct Params {
 
   double voxel_size_;
   double voxels_per_side_;
+
+  double h_cylinder_;
+  double radius_cylinder_;
+  int num_viewpoints_;
 
   size_t max_num_threads_ = std::thread::hardware_concurrency();
 };

@@ -6,26 +6,31 @@
 
 namespace frontiers {
 
-Sample::Sample(double r, double theta, double z) {
-  pose_.x() = r;
-  pose_.y() = theta;
-  pose_.z() = z;
+Viewpoints::Viewpoints() : radius_(0.0), h_(0.0) {}
+
+void Viewpoints::setShape(const double radius, const double h) {
+  radius_ = radius;
+  h_ = h;
 }
 
-Sample::Sample(Pose &pose) : pose_(pose) {}
-
-Viewpoints::Viewpoints(double radius, double h)
-    : radius_(radius),
-      h_(h),
-      radius_distribution_(-radius_, radius_),
-      theta_distribution_(-M_PI, M_PI),
-      z_distribution_(-h_ / 2.0, h_ / 2.0) {}
-
-void Viewpoints::generateSamples(int n) {
+void Viewpoints::generateSamples(int n, const double voxel_size,
+                                 const Point &center, HighResManager *manager,
+                                 AlignedVector<Point> &samples) {
+  CHECK_NOTNULL(manager);
+  samples.reserve(n);
+  Point center_global = (center + Point(0.5, 0.5, 0.5)) * voxel_size;
+  Point p;
+  double r;
+  double theta;
   for (int i = 0; i < n; ++i) {
-    samples_.emplace_back(Sample(radius_distribution_(generator_),
-                                 theta_distribution_(generator_),
-                                 z_distribution_(generator_)));
+    r = radius_distribution_(generator_);
+    theta = theta_distribution_(generator_);
+    p.x() = r * cos(theta) + center_global.x();
+    p.y() = r * sin(theta) + center_global.y();
+    p.z() = z_distribution_(generator_) + center_global.z();
+    if (manager->checkCollisionWithRobotAtVoxel(p) == VoxelStatus::kFree) {
+      samples.emplace_back(p);
+    }
   }
 }
 

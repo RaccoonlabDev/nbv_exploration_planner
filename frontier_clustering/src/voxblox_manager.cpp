@@ -119,6 +119,22 @@ VoxelStatus HighResManager::getVoxelStatus(const Point &position) const {
   }
 }
 
+VoxelStatus HighResManager::checkCollisionWithRobotAtVoxel(
+    const Point &position) const {
+  double distance = 0.0;
+  if (esdf_server_.getEsdfMapPtr()->getDistanceAtPosition(position,
+                                                          &distance)) {
+    // This means the voxel is observed
+    if (distance < params_->robot_radius_) {
+      return VoxelStatus::kOccupied;
+    } else {
+      return VoxelStatus::kFree;
+    }
+  } else {
+    return VoxelStatus::kUnknown;
+  }
+}
+
 bool HighResManager::checkCollisionWithRobotAtVoxel(
     const voxblox::GlobalIndex &global_index, bool is_unknown_collision) const {
   voxblox::EsdfVoxel *voxel =

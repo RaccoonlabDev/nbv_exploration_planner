@@ -14,6 +14,10 @@ ThreadSafeIndex* ThreadSafeIndexFactory::get(const std::string& mode,
   return nullptr;
 }
 
+ThreadSafeIndex* ThreadSafeIndexFactory::get(const size_t& size_array) {
+  return new MixedThreadSafeIndex(size_array);
+}
+
 ThreadSafeIndex::ThreadSafeIndex(size_t number_of_points)
     : atomic_idx_(0), number_of_points_(number_of_points) {}
 
