@@ -7,12 +7,14 @@
 
 #include <frontier_clustering/camera_model.h>
 #include <frontier_clustering/common.h>
+#include <frontier_clustering/voxblox_manager.h>
 #include <std_msgs/ColorRGBA.h>
 #include <voxblox/core/block_hash.h>
-#include <thread>
+#include <voxblox/integrator/integrator_utils.h>
 
 #include <chrono>
 #include <random>
+#include <thread>
 
 namespace frontiers {
 
@@ -54,8 +56,12 @@ class Frontier {
   void getAabb(voxblox::GlobalIndex* aabb_min,
                voxblox::GlobalIndex* aabb_max) const;
 
-  void generateViewpoints(const CameraModel& camera,
-                          const size_t& max_num_threads);
+  void assignYawAndFilter(CameraModel camera,
+                          const AlignedVector<Point>& samples,
+                          AlignedVector<std::pair<double, size_t>>& gains,
+                          const voxblox::LongIndexSet& voxels,
+                          const HighResManager& manager,
+                          voxblox::ThreadSafeIndex* index_getter);
 
  private:
   MatrixX3li frontier_voxels_;

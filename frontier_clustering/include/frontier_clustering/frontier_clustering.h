@@ -7,7 +7,6 @@
 
 #include <frontier_clustering/params.h>
 #include <frontier_clustering/viewpoints.h>
-#include <frontier_clustering/voxblox_manager.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <ros/ros.h>
 #include <tf/tf.h>
@@ -71,7 +70,7 @@ class FrontierClustering {
     return true;
   }
 
-  void sampleViewpoints(const Point& center);
+  void sampleViewpoints(Frontier& frontier);
 
   void serializeFrontierClustersMsg(Frontier& frontier);
 

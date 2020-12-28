@@ -3,7 +3,6 @@
 //
 
 #include "frontier_clustering/frontier_clustering.h"
-#include <thread>
 
 namespace frontiers {
 
@@ -168,7 +167,7 @@ void FrontierClustering::insertNewFrontiersRec(
     frontier.setId(id_counter_);
     ++id_counter_;
 
-    sampleViewpoints(frontier.mean());
+    sampleViewpoints(frontier);
 
     frontiers_.emplace_back(frontier);
     local_frontiers.emplace_back(&frontiers_.back());
@@ -176,20 +175,29 @@ void FrontierClustering::insertNewFrontiersRec(
   }
 }
 
-void FrontierClustering::sampleViewpoints(const Point& center) {
+void FrontierClustering::sampleViewpoints(Frontier& frontier) {
   AlignedVector<Point> samples;
   viewpoints_.generateSamples(params_.num_viewpoints_, params_.voxel_size_,
-                              center, &manager_, samples);
+                              frontier.mean(), &manager_, samples);
   VLOG(5) << "Sample size: " << samples.size();
 
   std::unique_ptr<voxblox::ThreadSafeIndex> index_getter(
       voxblox::ThreadSafeIndexFactory::get(samples.size()));
 
+  voxblox::LongIndexSet voxels;
+  for (size_t i = 0; i < frontier.frontier_voxels().size(); ++i) {
+    voxels.insert(voxblox::GlobalIndex{frontier.frontier_voxels()(i, 0),
+                                       frontier.frontier_voxels()(i, 1),
+                                       frontier.frontier_voxels()(i, 2)});
+  }
+
   std::list<std::thread> integration_threads;
+  AlignedVector<std::pair<double, size_t>> gains;
+  gains.reserve(samples.size());
   for (size_t i = 0; i < params_.max_num_threads_; ++i) {
-    /*integration_threads.emplace_back(&FastTsdfIntegrator::integrateFunction,
-                                     this, T_G_C, points_C, colors,
-                                     freespace_points, index_getter.get());*/
+    integration_threads.emplace_back(
+        &Frontier::assignYawAndFilter, frontier, camera_, std::ref(samples),
+        std::ref(gains), std::ref(voxels), std::ref(manager_), index_getter.get());
   }
 
   for (std::thread& thread : integration_threads) {
