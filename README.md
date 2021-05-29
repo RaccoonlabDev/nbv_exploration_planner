@@ -1,6 +1,6 @@
 # Next-Best-View Exploration Planner
 **license:** [CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/deed.en) <br/>
-**autors:**  Respall Victor Massague, Devitt Dmitry, Fedorenko Roman
+**autors:**  Victor Massague Respall, Devitt Dmitry, Fedorenko Roman
 
 ## Table of Contents
 * [Overview](#overview)
