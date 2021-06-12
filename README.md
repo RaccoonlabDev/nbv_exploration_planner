@@ -134,9 +134,9 @@ If false the pose must be given via the `transform` topic. (bool, default: true)
 If you use this software in a scientific publication, please cite the following paper, available [here](https://www.researchgate.net/publication/352169649_Fast_Sampling-based_Next-Best-View_Exploration_Algorithm_for_a_MAV):
 
 
-Video running on-board of a real MAV can be see [here](https://youtu.be/o1RbLLVwFTA) and a simulation of the History Graph capabilities [here](https://www.youtube.com/watch?v=V9ppuyBhTFU).
+Video running on-board of a real MAV can be see [here](https://www.youtube.com/watch?v=4HwDi0ACCY0) and a simulation of the History Graph capabilities [here](https://www.youtube.com/watch?v=V9ppuyBhTFU).
 
-Video of the ICRA presentation [here](https://www.youtube.com/watch?v=gXNHN-O5v9Y&t=3s)
+Video of the ICRA presentation [here](https://www.youtube.com/watch?v=gXNHN-O5v9Y)
 
 # Contact
 
